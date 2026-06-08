@@ -1,0 +1,9 @@
+.DS_Store
+.mcp.json
+.git/
+.github/
+Sources/
+supabase/
+README.md
+*.log
+
