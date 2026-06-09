@@ -3,6 +3,7 @@ import { membershipsToImport } from "./initial-memberships.js";
 
 const STORAGE_KEY = "pos-gym-state-v1";
 const DEFAULT_SUPABASE_URL = "https://jsettiedrwawrfbeiiei.supabase.co";
+const DEFAULT_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpzZXR0aWVkcndhd3JmYmVpaWVpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwMDU4MzcsImV4cCI6MjA5NTU4MTgzN30.j-PlazGP36XlOYAGXgTvXlJO1EENDjxhwoQGdAWsv5M";
 const MEMBERSHIP_PRICE = 50000;
 const CURRENT_INVENTORY_VERSION = "2026-06-08-current-products-v2";
 const PRODUCT_IMAGE_ASSETS = [
@@ -40,9 +41,9 @@ const initialState = {
   theme: "light",
   supabase: {
     url: DEFAULT_SUPABASE_URL,
-    anonKey: "",
+    anonKey: DEFAULT_SUPABASE_ANON_KEY,
     status: "pending",
-    message: "Falta guardar la llave publica anon.",
+    message: "Llave publica anon configurada.",
     checkedAt: null,
   },
   user: {
@@ -4594,9 +4595,9 @@ function clearSupabaseConfig() {
   if (!requirePermission("connection")) return;
   state.supabase = {
     url: DEFAULT_SUPABASE_URL,
-    anonKey: "",
+    anonKey: DEFAULT_SUPABASE_ANON_KEY,
     status: "pending",
-    message: "Falta guardar la llave publica anon.",
+    message: "Llave publica anon configurada.",
     checkedAt: null,
   };
   saveState();
