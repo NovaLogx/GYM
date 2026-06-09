@@ -253,6 +253,14 @@ function activeUser() {
   return state.users?.find((user) => user.id === state.currentUserId) || state.user || { id: "", name: "Sin sesión", role: "" };
 }
 
+function loginUsers() {
+  if (state.users?.length) return state.users;
+  return DEFAULT_SYSTEM_USERS.map((user, index) => ({
+    ...user,
+    id: `fallback-user-${index}`,
+  }));
+}
+
 function roleLabel(role = activeUser().role) {
   if (role === "super-admin") return "Super Admin";
   if (role === "admin") return "Admin";
@@ -1221,6 +1229,7 @@ function renderLoadingScreen() {
 }
 
 function renderLoginScreen() {
+  const users = loginUsers();
   return `
     <main class="login-screen">
       <section class="login-card">
@@ -1235,17 +1244,14 @@ function renderLoginScreen() {
         <form id="login-form" class="login-form">
           <div class="field">
             <label for="loginUser">Usuario</label>
-            ${state.users.length
-              ? renderPremiumSelect("loginUser", "loginUser", state.users.map((user) => ({ value: user.id, label: `${user.name} · ${roleLabel(user.role)}` })))
-              : `<div class="notice">No hay usuarios cargados desde Supabase.</div>`}
+            ${renderPremiumSelect("loginUser", "loginUser", users.map((user) => ({ value: user.id, label: `${user.name} · ${roleLabel(user.role)}` })))}
           </div>
           <div class="field">
             <label for="loginPassword">Contraseña</label>
             <input id="loginPassword" name="loginPassword" type="password" autocomplete="current-password" placeholder="Ingresa tu contraseña" required />
           </div>
-          <button class="button login-submit" type="submit" ${state.users.length ? "" : "disabled"}>${icon("login")}<span>Ingresar al sistema</span></button>
+          <button class="button login-submit" type="submit">${icon("login")}<span>Ingresar al sistema</span></button>
         </form>
-        ${!state.users.length ? renderInitialUserRegistration() : ""}
       </section>
     </main>
   `;
@@ -4072,7 +4078,7 @@ function handleSessionAction(action) {
 function login(event) {
   event.preventDefault();
   const data = Object.fromEntries(new FormData(event.currentTarget));
-  const user = state.users.find((item) => item.id === data.loginUser);
+  const user = loginUsers().find((item) => item.id === data.loginUser);
   const password = String(data.loginPassword || "");
 
   if (!user) {
@@ -4092,7 +4098,7 @@ function login(event) {
 
   state.sessionActive = true;
   state.currentUserId = user.id;
-  state.user = { name: user.name, role: user.role };
+  state.user = { id: user.id, name: user.name, role: user.role, password: user.password };
   state.activeTab = "monitor";
   state.toast = `Sesión iniciada como ${roleLabel(user.role)}.`;
   addMovement("sesion", `Sesion iniciada: ${user.name} (${roleLabel(user.role)})`);
