@@ -901,6 +901,82 @@ th {
   font-size: 13px;
 }
 
+.initial-register-panel {
+  background: linear-gradient(135deg, rgba(238, 242, 255, 0.82), rgba(240, 249, 255, 0.92));
+  border: 1px solid rgba(165, 180, 252, 0.45);
+  border-radius: 16px;
+  display: grid;
+  gap: 13px;
+  padding: 14px;
+}
+
+.initial-register-panel > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.initial-register-panel > div:first-child strong {
+  color: #0f1b3d;
+  font-size: 15px;
+}
+
+.initial-register-panel > div:first-child span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.initial-user-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.initial-user-grid article {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(203, 213, 225, 0.9);
+  border-radius: 13px;
+  display: grid;
+  gap: 5px;
+  justify-items: center;
+  min-height: 86px;
+  padding: 10px 7px;
+  text-align: center;
+}
+
+.initial-user-grid article > span {
+  align-items: center;
+  background: #eef2ff;
+  border-radius: 999px;
+  color: #4f46e5;
+  display: inline-flex;
+  height: 30px;
+  justify-content: center;
+  width: 30px;
+}
+
+.initial-user-grid .icon {
+  height: 16px;
+  width: 16px;
+}
+
+.initial-user-grid strong {
+  color: #0f1b3d;
+  font-size: 12px;
+}
+
+.initial-user-grid small {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.initial-register-button {
+  justify-content: center;
+  min-height: 42px;
+  width: 100%;
+}
+
 .permission-notice {
   align-items: center;
   display: flex;

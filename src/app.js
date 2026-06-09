@@ -7,6 +7,11 @@ const ROLE_PERMISSIONS = {
   admin: ["dashboard", "sales", "inventory-view", "inventory-edit", "memberships", "cash-view", "cash-open", "reports-view", "history"],
   operator: ["dashboard", "sales", "inventory-view", "cash-view", "cash-open"],
 };
+const DEFAULT_SYSTEM_USERS = [
+  { name: "Super Administrador", role: "super-admin", pin: "1234" },
+  { name: "Administrador", role: "admin", pin: "2345" },
+  { name: "Operador", role: "operator", pin: "3456" },
+];
 
 const initialState = {
   booting: true,
@@ -363,12 +368,24 @@ async function dbEnsureProfile() {
   if (user.id) return user.id;
   const existing = await supabaseSelect("profiles", "select=id&limit=1", { optional: true });
   if (existing?.[0]?.id) return existing[0].id;
-  const created = await supabaseInsert("profiles", {
-    full_name: "Super Admin",
-    role: "superadmin",
+  return dbEnsureSystemUser(DEFAULT_SYSTEM_USERS[0]);
+}
+
+async function dbEnsureSystemUser(user) {
+  const name = user.name.trim();
+  const existing = await supabaseSelect("profiles", `select=id,full_name&full_name=eq.${encodeURIComponent(name)}&limit=1`, { optional: true });
+  const payload = {
+    full_name: name,
+    role: dbRoleFromLocal(user.role),
     status: "active",
-    pin: "1234",
-  });
+    pin: user.pin,
+    updated_at: new Date().toISOString(),
+  };
+  if (existing?.[0]?.id) {
+    const updated = await supabasePatch("profiles", existing[0].id, payload);
+    return updated?.[0]?.id || existing[0].id;
+  }
+  const created = await supabaseInsert("profiles", payload);
   return created?.[0]?.id || "";
 }
 
@@ -699,8 +716,21 @@ async function hydrateFromSupabase() {
 }
 
 function applyRemoteProfiles(profiles) {
-  if (!profiles.length) return;
-  state.users = profiles.map((profile) => ({
+  if (!profiles.length) {
+    state.users = [];
+    state.currentUserId = "";
+    state.user = { name: "Sin sesión", role: "" };
+    state.sessionActive = false;
+    return;
+  }
+  const dedupedProfiles = [...profiles]
+    .filter((profile) => profile.status !== "inactive")
+    .reduce((map, profile) => {
+      const key = normalizeMemberName(profile.full_name || "");
+      if (key && !map.has(key)) map.set(key, profile);
+      return map;
+    }, new Map());
+  state.users = [...dedupedProfiles.values()].map((profile) => ({
     id: profile.id,
     name: profile.full_name,
     role: localRoleFromDb(profile.role),
@@ -1210,6 +1240,7 @@ function renderLoginScreen() {
           </div>
           <button class="button login-submit" type="submit" ${state.users.length ? "" : "disabled"}>${icon("login")}<span>Ingresar al sistema</span></button>
         </form>
+        ${!state.users.length ? renderInitialUserRegistration() : ""}
       </section>
     </main>
   `;
@@ -1218,6 +1249,30 @@ function renderLoginScreen() {
 function bindLoginEvents() {
   bindPremiumSelects();
   document.querySelector("#login-form")?.addEventListener("submit", login);
+  document.querySelector("#create-default-users")?.addEventListener("click", createDefaultSystemUsers);
+}
+
+function renderInitialUserRegistration() {
+  return `
+    <section class="initial-register-panel">
+      <div>
+        <strong>Registro inicial</strong>
+        <span>Crea los tres accesos base del sistema en Supabase.</span>
+      </div>
+      <div class="initial-user-grid">
+        ${DEFAULT_SYSTEM_USERS.map((user) => `
+          <article>
+            <span>${icon(user.role === "super-admin" ? "settings" : user.role === "admin" ? "user" : "pos")}</span>
+            <strong>${roleLabel(user.role)}</strong>
+            <small>PIN ${user.pin}</small>
+          </article>
+        `).join("")}
+      </div>
+      <button class="button initial-register-button" type="button" id="create-default-users">
+        ${icon("user")}<span>Crear usuarios base</span>
+      </button>
+    </section>
+  `;
 }
 
 function renderTabs() {
@@ -3685,7 +3740,7 @@ function renderConnection() {
         <span class="status ${tone}">${connectionLabel()}</span>
       </div>
       <div class="notice">
-        La llave anon publica no vive en el codigo fuente. Vercel la entrega al navegador desde <strong>/api/config.js</strong>. La llave <strong>service_role</strong> no se usa en la web.
+        La llave anon publica no vive en el codigo fuente. Vercel la entrega al navegador desde <strong>/api/bodyfit-env.js</strong>. La llave <strong>service_role</strong> no se usa en la web.
       </div>
     </section>
 
@@ -4030,6 +4085,24 @@ function dismissToastAfterDelay() {
     saveState();
     render();
   }, 2600);
+}
+
+async function createDefaultSystemUsers() {
+  if (!supabaseConfigured()) {
+    alert("Primero configura SUPABASE_URL y SUPABASE_ANON_KEY en Vercel.");
+    return;
+  }
+
+  try {
+    for (const user of DEFAULT_SYSTEM_USERS) {
+      await dbEnsureSystemUser(user);
+    }
+    state.toast = "Usuarios base creados en Supabase.";
+    await hydrateFromSupabase();
+    dismissToastAfterDelay();
+  } catch (error) {
+    alert(`No pude crear los usuarios base en Supabase: ${error.message}`);
+  }
 }
 
 async function addSystemUser(event) {
