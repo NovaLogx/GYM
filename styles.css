@@ -1026,6 +1026,23 @@ th {
   font-size: 13px;
 }
 
+.user-password-form {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-column: 2 / -1;
+  grid-template-columns: minmax(190px, 1fr) auto;
+}
+
+.user-password-form input {
+  min-height: 42px;
+}
+
+.user-password-form .button {
+  min-height: 42px;
+  white-space: nowrap;
+}
+
 .modal-backdrop {
   align-items: center;
   background: rgba(7, 20, 38, 0.56);
@@ -5871,6 +5888,11 @@ button:focus-visible,
   .user-access-card .button {
     grid-column: 2;
     justify-self: start;
+  }
+
+  .user-password-form {
+    grid-column: 1 / -1;
+    grid-template-columns: 1fr;
   }
 
   .member-notes-field {

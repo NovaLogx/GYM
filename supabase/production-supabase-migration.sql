@@ -10,6 +10,7 @@ alter table public.products
   add column if not exists purchase_cost_total numeric(12, 2);
 
 alter table public.profiles
+  add column if not exists password text,
   add column if not exists pin text;
 
 alter table public.inventory
@@ -142,25 +143,32 @@ drop policy if exists "anon write cash_movements" on public.cash_movements;
 create policy "anon read cash_movements" on public.cash_movements for select to anon using (true);
 create policy "anon write cash_movements" on public.cash_movements for insert to anon with check (true);
 
-with default_users(full_name, role, status, pin) as (
+update public.profiles
+set status = 'inactive'::profile_status,
+    pin = null,
+    updated_at = now()
+where lower(trim(full_name)) = 'super admin';
+
+with default_users(full_name, role, status, password) as (
   values
-    ('Super Administrador', 'superadmin'::user_role, 'active'::profile_status, '1234'),
-    ('Administrador', 'admin'::user_role, 'active'::profile_status, '2345'),
-    ('Operador', 'cashier'::user_role, 'active'::profile_status, '3456')
+    ('Super Administrador', 'superadmin'::user_role, 'active'::profile_status, 'Superadmin'),
+    ('Administrador', 'admin'::user_role, 'active'::profile_status, null),
+    ('Operador', 'cashier'::user_role, 'active'::profile_status, null)
 ),
 updated_users as (
   update public.profiles profiles
   set
     role = default_users.role,
     status = default_users.status,
-    pin = default_users.pin,
+    password = coalesce(default_users.password, profiles.password),
+    pin = null,
     updated_at = now()
   from default_users
   where lower(trim(profiles.full_name)) = lower(trim(default_users.full_name))
   returning profiles.full_name
 )
-insert into public.profiles (full_name, role, status, pin)
-select default_users.full_name, default_users.role, default_users.status, default_users.pin
+insert into public.profiles (full_name, role, status, password, pin)
+select default_users.full_name, default_users.role, default_users.status, default_users.password, null
 from default_users
 where not exists (
   select 1

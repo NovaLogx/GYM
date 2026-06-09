@@ -12,9 +12,9 @@ const ROLE_PERMISSIONS = {
   operator: ["dashboard", "sales", "inventory-view", "cash-view", "cash-open"],
 };
 const DEFAULT_SYSTEM_USERS = [
-  { name: "Super Administrador", role: "super-admin", pin: "1234" },
-  { name: "Administrador", role: "admin", pin: "2345" },
-  { name: "Operador", role: "operator", pin: "3456" },
+  { name: "Super Administrador", role: "super-admin", password: "Superadmin" },
+  { name: "Administrador", role: "admin", password: "" },
+  { name: "Operador", role: "operator", password: "" },
 ];
 
 const initialState = {
@@ -382,7 +382,8 @@ async function dbEnsureSystemUser(user) {
     full_name: name,
     role: dbRoleFromLocal(user.role),
     status: "active",
-    pin: user.pin,
+    password: user.password || null,
+    pin: null,
     updated_at: new Date().toISOString(),
   };
   if (existing?.[0]?.id) {
@@ -682,7 +683,7 @@ async function hydrateFromSupabase() {
       clients,
       memberships,
     ] = await Promise.all([
-      supabaseSelect("profiles", "select=id,full_name,role,status,pin&order=created_at.asc", { optional: true }),
+      supabaseSelect("profiles", "select=id,full_name,role,status,password&order=created_at.asc", { optional: true }),
       supabaseSelect("categories", "select=id,name,is_active&order=name.asc", { optional: true }),
       supabaseSelect("products", "select=id,name,sku,category_id,sale_price,purchase_cost,purchase_cost_total,status,supplier_name,image_url,updated_at&order=name.asc", { optional: true }),
       supabaseSelect("inventory", "select=product_id,current_quantity,min_quantity,ideal_quantity,inventory_date,week_start,week_end,updated_at", { optional: true }),
@@ -738,7 +739,7 @@ function applyRemoteProfiles(profiles) {
     id: profile.id,
     name: profile.full_name,
     role: localRoleFromDb(profile.role),
-    pin: profile.pin || "",
+    password: profile.password || "",
   }));
   if (!state.users.some((user) => user.id === state.currentUserId)) {
     const superAdmin = state.users.find((user) => user.role === "super-admin") || state.users[0];
@@ -1229,7 +1230,7 @@ function renderLoginScreen() {
         </div>
         <div>
           <h1>Iniciar sesión</h1>
-          <p>Selecciona tu usuario e ingresa el PIN asignado.</p>
+          <p>Selecciona tu usuario e ingresa tu contraseña.</p>
         </div>
         <form id="login-form" class="login-form">
           <div class="field">
@@ -1239,8 +1240,8 @@ function renderLoginScreen() {
               : `<div class="notice">No hay usuarios cargados desde Supabase.</div>`}
           </div>
           <div class="field">
-            <label for="loginPin">PIN</label>
-            <input id="loginPin" name="loginPin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="Ingresa tu PIN" required />
+            <label for="loginPassword">Contraseña</label>
+            <input id="loginPassword" name="loginPassword" type="password" autocomplete="current-password" placeholder="Ingresa tu contraseña" required />
           </div>
           <button class="button login-submit" type="submit" ${state.users.length ? "" : "disabled"}>${icon("login")}<span>Ingresar al sistema</span></button>
         </form>
@@ -1268,7 +1269,7 @@ function renderInitialUserRegistration() {
           <article>
             <span>${icon(user.role === "super-admin" ? "settings" : user.role === "admin" ? "user" : "pos")}</span>
             <strong>${roleLabel(user.role)}</strong>
-            <small>PIN ${user.pin}</small>
+            <small>${user.role === "super-admin" ? "Acceso maestro" : "Contraseña pendiente"}</small>
           </article>
         `).join("")}
       </div>
@@ -2389,8 +2390,8 @@ function renderUserManagement() {
           ])}
         </div>
         <div class="field">
-          <label for="accountPin">PIN</label>
-          <input id="accountPin" name="accountPin" type="password" inputmode="numeric" pattern="[0-9]*" minlength="4" placeholder="4 números" required />
+          <label for="accountPassword">Contraseña inicial</label>
+          <input id="accountPassword" name="accountPassword" type="password" minlength="6" autocomplete="new-password" placeholder="Contraseña segura" required />
         </div>
         <div class="actions"><button class="button" type="submit">Crear usuario</button></div>
       </form>
@@ -2404,15 +2405,20 @@ function renderUserManagement() {
 function renderUserAccessCard(user) {
   const permissions = ROLE_PERMISSIONS[user.role] || [];
   const canDelete = user.id !== state.currentUserId && user.id !== "super-admin";
+  const passwordStatus = user.password ? "Contraseña configurada" : "Sin contraseña configurada";
   return `
     <article class="user-access-card">
       <div class="member-avatar">${user.name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase()}</div>
       <div>
         <strong>${user.name}</strong>
-        <span>${roleLabel(user.role)} · ${permissions.length} permisos activos</span>
+        <span>${roleLabel(user.role)} · ${permissions.length} permisos activos · ${passwordStatus}</span>
       </div>
       ${renderStatusBadge(user.role === "super-admin" ? "Acceso completo" : user.role === "admin" ? "Gestión operativa" : "Acceso limitado", user.role === "operator" ? "warn" : "ok")}
       ${canDelete ? `<button class="button secondary" type="button" data-delete-user="${user.id}">Eliminar</button>` : ""}
+      <form class="user-password-form" data-password-user="${user.id}">
+        <input name="newPassword" type="password" minlength="6" autocomplete="new-password" placeholder="Nueva contraseña" required />
+        <button class="button secondary" type="submit">Guardar contraseña</button>
+      </form>
     </article>
   `;
 }
@@ -3909,6 +3915,9 @@ function bindEvents() {
   document.querySelector("#confirm-renew-member")?.addEventListener("click", confirmRenewMembership);
   document.querySelector("#confirm-delete-member")?.addEventListener("click", confirmDeleteMembership);
   document.querySelector("#user-form")?.addEventListener("submit", addSystemUser);
+  document.querySelectorAll("[data-password-user]").forEach((form) => {
+    form.addEventListener("submit", updateSystemUserPassword);
+  });
   document.querySelector("#product-search-input")?.addEventListener("input", filterProductSearch);
   document.querySelector("#open-cash-form")?.addEventListener("submit", openCash);
   document.querySelector("#close-cash-form")?.addEventListener("submit", closeCash);
@@ -4064,9 +4073,20 @@ function login(event) {
   event.preventDefault();
   const data = Object.fromEntries(new FormData(event.currentTarget));
   const user = state.users.find((item) => item.id === data.loginUser);
+  const password = String(data.loginPassword || "");
 
-  if (!user || user.pin !== data.loginPin.trim()) {
-    alert("El usuario o PIN no son correctos.");
+  if (!user) {
+    alert("Selecciona un usuario válido.");
+    return;
+  }
+
+  if (!user.password) {
+    alert("Este usuario todavía no tiene contraseña configurada.");
+    return;
+  }
+
+  if (String(user.password) !== password) {
+    alert("El usuario o la contraseña no son correctos.");
     return;
   }
 
@@ -4114,10 +4134,10 @@ async function addSystemUser(event) {
   if (!requirePermission("users-manage")) return;
   const data = Object.fromEntries(new FormData(event.currentTarget));
   const name = data.accountName.trim();
-  const pin = data.accountPin.trim();
+  const password = String(data.accountPassword || "");
 
-  if (!name || !/^\d{4,8}$/.test(pin)) {
-    alert("Ingresa un nombre y un PIN numérico de 4 a 8 dígitos.");
+  if (!name || password.length < 6) {
+    alert("Ingresa un nombre y una contraseña de mínimo 6 caracteres.");
     return;
   }
 
@@ -4126,13 +4146,46 @@ async function addSystemUser(event) {
       full_name: name,
       role: dbRoleFromLocal(data.accountRole),
       status: "active",
-      pin,
+      password,
+      pin: null,
     });
     state.toast = `Usuario creado: ${name}`;
     await hydrateFromSupabase();
     dismissToastAfterDelay();
   } catch (error) {
     alert(`No se pudo crear el usuario en Supabase: ${error.message}`);
+  }
+}
+
+async function updateSystemUserPassword(event) {
+  event.preventDefault();
+  if (!requirePermission("users-manage")) return;
+  const form = event.currentTarget;
+  const userId = form.dataset.passwordUser;
+  const user = state.users.find((item) => item.id === userId);
+  const password = String(new FormData(form).get("newPassword") || "");
+
+  if (!user) {
+    alert("No encontré este usuario.");
+    return;
+  }
+
+  if (password.length < 6) {
+    alert("La contraseña debe tener mínimo 6 caracteres.");
+    return;
+  }
+
+  try {
+    await supabasePatch("profiles", user.id, {
+      password,
+      pin: null,
+      updated_at: new Date().toISOString(),
+    });
+    state.toast = `Contraseña actualizada para ${user.name}.`;
+    await hydrateFromSupabase();
+    dismissToastAfterDelay();
+  } catch (error) {
+    alert(`No se pudo actualizar la contraseña: ${error.message}`);
   }
 }
 
