@@ -1,35 +1,7 @@
-import { menuCafProducts } from "./menu-caf-products.js";
-import { membershipsToImport } from "./initial-memberships.js";
-
-const STORAGE_KEY = "pos-gym-state-v1";
-const DEFAULT_SUPABASE_URL = "https://jsettiedrwawrfbeiiei.supabase.co";
-const DEFAULT_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpzZXR0aWVkcndhd3JmYmVpaWVpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwMDU4MzcsImV4cCI6MjA5NTU4MTgzN30.j-PlazGP36XlOYAGXgTvXlJO1EENDjxhwoQGdAWsv5M";
+const env = window.BODY_FIT_ENV || {};
+const DEFAULT_SUPABASE_URL = env.SUPABASE_URL || "";
+const DEFAULT_SUPABASE_ANON_KEY = env.SUPABASE_ANON_KEY || "";
 const MEMBERSHIP_PRICE = 50000;
-const CURRENT_INVENTORY_VERSION = "2026-06-08-current-products-v2";
-const PRODUCT_IMAGE_ASSETS = [
-  { keys: ["caf-beb-agua-l", "agua litro", "cristal 1 litro"], url: "./assets/product-images/agua-litro.png" },
-  { keys: ["caf-beb-agua-p", "agua personal", "agua botella 600", "agua 600"], url: "./assets/product-images/agua-personal.png" },
-  { keys: ["caf-beb-agua-gas", "agua con gas"], url: "./assets/product-images/agua-con-gas.png" },
-  { keys: ["caf-beb-bolsa-agua", "bolsa agua"], url: "./assets/product-images/bolsa-agua.png" },
-  { keys: ["caf-beb-amper", "amper"], url: "./assets/product-images/amper-current.jpg" },
-  { keys: ["caf-beb-speed", "speed"], url: "./assets/product-images/speed.png" },
-  { keys: ["caf-beb-vive100", "vive 100", "vive100"], url: "./assets/product-images/vive100-current.jpg" },
-  { keys: ["caf-beb-redbull", "red bull", "redbull"], url: "./assets/product-images/redbull.png" },
-  { keys: ["caf-beb-squash", "squash"], url: "./assets/product-images/squash-current.jpg" },
-  { keys: ["caf-beb-electrolit", "electrolit"], url: "./assets/product-images/electrolit.png" },
-];
-const CURRENT_INVENTORY_PRODUCTS = [
-  { name: "Agua litro", sku: "AGUA-LITRO", category: "Aguas", quantity: 12, purchaseCostTotal: 20000, purchaseCost: 1667, salePrice: 3500, minQuantity: 4, idealQuantity: 12 },
-  { name: "Agua personal", sku: "AGUA-PERSONAL", category: "Aguas", quantity: 24, purchaseCostTotal: 26000, purchaseCost: 1083, salePrice: 2500, minQuantity: 8, idealQuantity: 24 },
-  { name: "Vive 100", sku: "VIVE-100", category: "Hidratantes", quantity: 6, purchaseCostTotal: 13000, purchaseCost: 2167, salePrice: 3000, minQuantity: 2, idealQuantity: 6 },
-  { name: "Amper", sku: "AMPER", category: "Energizantes", quantity: 6, purchaseCostTotal: 17000, purchaseCost: 2833, salePrice: 4000, minQuantity: 2, idealQuantity: 6 },
-  { name: "Squash", sku: "SQUASH", category: "Hidratantes", quantity: 12, purchaseCostTotal: 31000, purchaseCost: 2583, salePrice: 3500, minQuantity: 4, idealQuantity: 12 },
-];
-const DEFAULT_USERS = [
-  { id: "super-admin", name: "Super Admin", role: "super-admin", pin: "1234" },
-  { id: "admin", name: "Administrador", role: "admin", pin: "2345" },
-  { id: "operator", name: "Operador", role: "operator", pin: "3456" },
-];
 const ROLE_PERMISSIONS = {
   "super-admin": ["dashboard", "sales", "inventory-view", "inventory-edit", "memberships", "cash-view", "cash-open", "cash-edit", "reports-view", "reports-edit", "history", "settings", "users-manage", "connection"],
   admin: ["dashboard", "sales", "inventory-view", "inventory-edit", "memberships", "cash-view", "cash-open", "reports-view", "history"],
@@ -37,22 +9,23 @@ const ROLE_PERMISSIONS = {
 };
 
 const initialState = {
+  booting: true,
   activeTab: "monitor",
   theme: "light",
   supabase: {
     url: DEFAULT_SUPABASE_URL,
     anonKey: DEFAULT_SUPABASE_ANON_KEY,
     status: "pending",
-    message: "Llave publica anon configurada.",
+    message: DEFAULT_SUPABASE_URL && DEFAULT_SUPABASE_ANON_KEY ? "Configuracion cargada desde Vercel." : "Faltan variables de entorno de Supabase.",
     checkedAt: null,
   },
   user: {
-    name: "Super Admin",
-    role: "super-admin",
+    name: "Sin sesión",
+    role: "",
   },
-  users: DEFAULT_USERS,
-  currentUserId: "super-admin",
-  sessionActive: true,
+  users: [],
+  currentUserId: "",
+  sessionActive: false,
   settingsView: "home",
   reportsView: "",
   reportStatsPeriod: "day",
@@ -60,59 +33,8 @@ const initialState = {
   reportStatsStartDate: toDateKey(new Date()),
   reportStatsEndDate: toDateKey(new Date()),
   cashRegister: null,
-  members: [
-    {
-      id: crypto.randomUUID(),
-      name: "Carlos Perez",
-      phone: "555-0101",
-      documentId: "BF-001",
-      email: "carlos@example.com",
-      plan: "Mensual",
-      acquiredAt: toDateKey(new Date()),
-      notes: "Entrena en horario tarde",
-    },
-  ],
-  products: [
-    {
-      id: crypto.randomUUID(),
-      name: "Agua botella 600 ml",
-      sku: "AGUA-600",
-      category: "Bebidas",
-      salePrice: 2500,
-      purchaseCost: 1200,
-      quantity: 18,
-      minQuantity: 10,
-      idealQuantity: 40,
-      supplier: "Proveedor local",
-      status: "activo",
-    },
-    {
-      id: crypto.randomUUID(),
-      name: "Proteina porcion",
-      sku: "PROT-POR",
-      category: "Suplementos",
-      salePrice: 8000,
-      purchaseCost: 4300,
-      quantity: 4,
-      minQuantity: 5,
-      idealQuantity: 20,
-      supplier: "Distribuidor suplementos",
-      status: "activo",
-    },
-    {
-      id: crypto.randomUUID(),
-      name: "Barra energetica",
-      sku: "BARRA-ENE",
-      category: "Snacks",
-      salePrice: 4500,
-      purchaseCost: 2500,
-      quantity: 0,
-      minQuantity: 6,
-      idealQuantity: 24,
-      supplier: "",
-      status: "agotado",
-    },
-  ],
+  members: [],
+  products: [],
   sales: [],
   cashMovements: [],
   reportDemoSeeded: false,
@@ -126,49 +48,26 @@ const initialState = {
   editingProductId: "",
   memberModalMode: "",
   selectedMemberId: "",
-  membershipsInitialImportApplied: false,
-  currentInventoryImportApplied: false,
-  currentInventoryImportVersion: "",
   membershipImportSummary: null,
   saleCart: [],
   saleNewPanelOpen: false,
   salePaymentMethod: "cash",
   pendingSale: null,
-  movements: [
-    {
-      id: crypto.randomUUID(),
-      type: "inventario",
-      description: "Carga inicial de productos de referencia",
-      amount: 0,
-      createdAt: new Date().toISOString(),
-    },
-  ],
+  movements: [],
 };
 
-let state = loadState();
-saveState();
-
-function loadState() {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (!saved) return normalizeState(initialState);
-
-  try {
-    return normalizeState({ ...initialState, ...JSON.parse(saved) });
-  } catch {
-    return normalizeState(initialState);
-  }
-}
+let state = normalizeState(initialState);
 
 function normalizeState(nextState) {
-  const users = Array.isArray(nextState.users) && nextState.users.length ? nextState.users : DEFAULT_USERS;
-  const currentUserId = nextState.currentUserId || users.find((user) => user.role === "super-admin")?.id || users[0]?.id || "";
-  const currentUser = users.find((user) => user.id === currentUserId) || users[0] || DEFAULT_USERS[0];
+  const users = Array.isArray(nextState.users) ? nextState.users : [];
+  const currentUserId = nextState.currentUserId || "";
+  const currentUser = users.find((user) => user.id === currentUserId);
   const normalizedState = {
     ...nextState,
     users,
     currentUserId,
-    user: { name: currentUser.name, role: currentUser.role },
-    sessionActive: nextState.sessionActive !== false,
+    user: currentUser ? { name: currentUser.name, role: currentUser.role } : { name: "Sin sesión", role: "" },
+    sessionActive: Boolean(nextState.sessionActive && currentUser),
     toast: "",
     members: nextState.members || [],
     products: nextState.products.map(withInventoryWeek),
@@ -188,53 +87,12 @@ function normalizeState(nextState) {
     salePaymentMethod: ["cash", "transfer"].includes(nextState.salePaymentMethod) ? nextState.salePaymentMethod : "cash",
     historyMonth: nextState.historyMonth || toMonthKey(new Date()),
     historyWeekStart: nextState.historyWeekStart || toDateKey(startOfHistoryWeek(new Date())),
-    currentInventoryImportApplied: Boolean(nextState.currentInventoryImportApplied),
-    currentInventoryImportVersion: nextState.currentInventoryImportVersion || "",
   };
-
-  if (normalizedState.currentInventoryImportVersion !== CURRENT_INVENTORY_VERSION) {
-    applyCurrentInventoryProducts(normalizedState);
-    normalizedState.currentInventoryImportApplied = true;
-    normalizedState.currentInventoryImportVersion = CURRENT_INVENTORY_VERSION;
-  }
-
-  if (!normalizedState.membershipsInitialImportApplied) {
-    normalizedState.membershipImportSummary = importInitialMemberships(normalizedState, membershipsToImport);
-    normalizedState.membershipsInitialImportApplied = true;
-  }
 
   rolloverCashRegisterForToday(normalizedState);
   normalizedState.cashMovements = syncCashMovementsFromSales(normalizedState);
 
-  return seedReportDemoSales(normalizedState);
-}
-
-function applyCurrentInventoryProducts(targetState) {
-  const activeKeys = new Set(CURRENT_INVENTORY_PRODUCTS.map((product) => normalizeProductKey(product.name)));
-
-  targetState.products = (targetState.products || []).map((product) => {
-    if (activeKeys.has(normalizeProductKey(product.name))) return product;
-    return withInventoryWeek({
-      ...product,
-      quantity: 0,
-      status: "inactivo",
-    });
-  });
-
-  CURRENT_INVENTORY_PRODUCTS.forEach((sourceProduct) => {
-    const existing = targetState.products.find((product) => normalizeProductKey(product.name) === normalizeProductKey(sourceProduct.name));
-    const nextProduct = withInventoryWeek({
-      ...(existing || {}),
-      ...sourceProduct,
-      id: existing?.id || crypto.randomUUID(),
-      supplier: existing?.supplier || "Inventario actual",
-      status: "activo",
-      imageUrl: productImageUrl(sourceProduct) || existing?.imageUrl || "",
-    });
-
-    if (existing) Object.assign(existing, nextProduct);
-    else targetState.products.push(nextProduct);
-  });
+  return normalizedState;
 }
 
 function normalizeProductKey(value = "") {
@@ -253,7 +111,6 @@ function syncCashMovementsFromSales(targetState) {
   const groupedSales = new Map();
 
   (targetState.sales || []).forEach((sale) => {
-    if (sale.demo) return;
     const category = sale.source === "membership_renewal"
       ? "renovacion_membresia"
       : sale.source === "membership"
@@ -306,69 +163,6 @@ function reportCategoryLabel(category, fallback = "") {
   return fallback || "Movimiento de caja";
 }
 
-function importInitialMemberships(targetState, memberships) {
-  const summary = {
-    total: 0,
-    created: 0,
-    updated: 0,
-    active: 0,
-    expired: 0,
-    possibleDuplicates: ["Dani Quiñonez", "Dani Quiñones"],
-  };
-  const now = new Date().toISOString();
-
-  memberships.forEach((membership) => {
-    const name = membership.name.trim();
-    if (!name || membership.startDate > membership.endDate) return;
-
-    summary.total += 1;
-    const status = getImportedMembershipStatus(membership.endDate);
-    if (status === "vencida") summary.expired += 1;
-    else summary.active += 1;
-
-    const existing = targetState.members.find((member) => normalizeMemberName(member.name) === normalizeMemberName(name));
-    const notes = isPossibleImportedDuplicate(name)
-      ? "Importacion inicial. Posible duplicado para revision manual: Dani Quiñonez / Dani Quiñones."
-      : "Importacion inicial de membresias actuales.";
-
-    if (existing) {
-      Object.assign(existing, {
-        name,
-        plan: existing.plan || "Mensual",
-        acquiredAt: membership.startDate,
-        expiresAt: membership.endDate,
-        status,
-        price: MEMBERSHIP_PRICE,
-        notes: existing.notes || notes,
-        importedAt: existing.importedAt || now,
-        updatedAt: now,
-      });
-      summary.updated += 1;
-      return;
-    }
-
-    targetState.members.push({
-      id: crypto.randomUUID(),
-      name,
-      phone: "",
-      documentId: "",
-      email: "",
-      plan: "Mensual",
-      acquiredAt: membership.startDate,
-      expiresAt: membership.endDate,
-      status,
-      price: MEMBERSHIP_PRICE,
-      notes,
-      importedAt: now,
-      createdAt: now,
-      updatedAt: now,
-    });
-    summary.created += 1;
-  });
-
-  return summary;
-}
-
 function normalizeMemberName(name = "") {
   return name.trim().toLocaleLowerCase("es-CO").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
 }
@@ -379,10 +173,6 @@ function getImportedMembershipStatus(endDate) {
   today.setHours(0, 0, 0, 0);
   expiration.setHours(0, 0, 0, 0);
   return expiration < today ? "vencida" : "activa";
-}
-
-function isPossibleImportedDuplicate(name = "") {
-  return ["dani quinonez", "dani quinones"].includes(normalizeMemberName(name));
 }
 
 function createCashRegister(initialAmount = 0, notes = "", openedAt = new Date().toISOString()) {
@@ -451,7 +241,7 @@ function rolloverCashRegisterForToday(targetState) {
 }
 
 function activeUser() {
-  return state.users?.find((user) => user.id === state.currentUserId) || state.user || DEFAULT_USERS[0];
+  return state.users?.find((user) => user.id === state.currentUserId) || state.user || { id: "", name: "Sin sesión", role: "" };
 }
 
 function roleLabel(role = activeUser().role) {
@@ -487,46 +277,581 @@ function routePermission(tabId) {
   }[tabId] || "dashboard";
 }
 
-function seedReportDemoSales(nextState) {
-  if (nextState.reportDemoSeeded) return nextState;
+function saveState() {
+  // El estado operativo vive en Supabase. Esta función solo conserva el flujo actual en memoria.
+}
 
-  const demoSales = [
-    { daysAgo: 1, hour: 9, minute: 20, productName: "Agua botella 600 ml", quantity: 3, salePrice: 2500, purchaseCost: 1200, paymentMethod: "cash" },
-    { daysAgo: 1, hour: 11, minute: 45, productName: "Proteina porcion", quantity: 2, salePrice: 8000, purchaseCost: 4300, paymentMethod: "transfer" },
-    { daysAgo: 1, hour: 18, minute: 10, productName: "Barra energetica", quantity: 4, salePrice: 4500, purchaseCost: 2500, paymentMethod: "cash" },
-    { daysAgo: 2, hour: 8, minute: 35, productName: "Agua botella 600 ml", quantity: 5, salePrice: 2500, purchaseCost: 1200, paymentMethod: "cash" },
-    { daysAgo: 2, hour: 16, minute: 5, productName: "Proteina porcion", quantity: 1, salePrice: 8000, purchaseCost: 4300, paymentMethod: "transfer" },
-    { daysAgo: 2, hour: 19, minute: 25, productName: "Shot energetico C4", quantity: 2, salePrice: 5000, purchaseCost: 2333, paymentMethod: "cash" },
-  ].map((sale) => {
-    const createdAt = new Date();
-    createdAt.setDate(createdAt.getDate() - sale.daysAgo);
-    createdAt.setHours(sale.hour, sale.minute, 0, 0);
-    const total = sale.salePrice * sale.quantity;
-    const cost = sale.purchaseCost * sale.quantity;
+function supabaseHeaders({ prefer = "" } = {}) {
+  const headers = {
+    apikey: state.supabase.anonKey,
+    Authorization: `Bearer ${state.supabase.anonKey}`,
+  };
+  if (prefer) headers.Prefer = prefer;
+  return headers;
+}
 
-    return {
-      id: crypto.randomUUID(),
-      productId: `demo-${sale.productName.toLowerCase().replace(/\W+/g, "-")}`,
-      productName: sale.productName,
-      quantity: sale.quantity,
-      paymentMethod: sale.paymentMethod,
-      total,
-      cost,
-      profit: total - cost,
-      createdAt: createdAt.toISOString(),
-      demo: true,
-    };
+async function supabaseRequest(path, { method = "GET", body = null, prefer = "", optional = false } = {}) {
+  if (!supabaseConfigured()) {
+    throw new Error("Supabase no esta configurado.");
+  }
+
+  const response = await fetch(`${state.supabase.url}/rest/v1/${path}`, {
+    method,
+    headers: {
+      ...supabaseHeaders({ prefer }),
+      ...(body ? { "Content-Type": "application/json" } : {}),
+    },
+    body: body ? JSON.stringify(body) : null,
   });
 
-  return {
-    ...nextState,
-    reportDemoSeeded: true,
-    sales: [...(nextState.sales || []), ...demoSales],
+  if (!response.ok) {
+    const details = await response.text();
+    if (optional && response.status === 404) return [];
+    throw new Error(details || `Error Supabase ${response.status}`);
+  }
+
+  if (response.status === 204) return null;
+  const text = await response.text();
+  return text ? JSON.parse(text) : null;
+}
+
+function supabaseSelect(table, query = "select=*", options = {}) {
+  return supabaseRequest(`${table}?${query}`, options);
+}
+
+function supabaseInsert(table, payload) {
+  return supabaseRequest(table, {
+    method: "POST",
+    body: payload,
+    prefer: "return=representation",
+  });
+}
+
+function supabaseUpsert(table, payload, conflictColumn) {
+  return supabaseRequest(`${table}?on_conflict=${encodeURIComponent(conflictColumn)}`, {
+    method: "POST",
+    body: payload,
+    prefer: "resolution=merge-duplicates,return=representation",
+  });
+}
+
+function supabasePatch(table, id, payload) {
+  return supabaseRequest(`${table}?id=eq.${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: payload,
+    prefer: "return=representation",
+  });
+}
+
+function supabasePatchWhere(table, filter, payload) {
+  return supabaseRequest(`${table}?${filter}`, {
+    method: "PATCH",
+    body: payload,
+    prefer: "return=representation",
+  });
+}
+
+function supabaseDeleteWhere(table, filter) {
+  return supabaseRequest(`${table}?${filter}`, {
+    method: "DELETE",
+    prefer: "return=representation",
+  });
+}
+
+async function dbEnsureProfile() {
+  const user = activeUser();
+  if (user.id) return user.id;
+  const existing = await supabaseSelect("profiles", "select=id&limit=1", { optional: true });
+  if (existing?.[0]?.id) return existing[0].id;
+  const created = await supabaseInsert("profiles", {
+    full_name: "Super Admin",
+    role: "superadmin",
+    status: "active",
+    pin: "1234",
+  });
+  return created?.[0]?.id || "";
+}
+
+async function dbEnsureCategory(name) {
+  const categoryName = (name || "Inventario").trim();
+  const existing = await supabaseSelect("categories", `select=id,name&name=eq.${encodeURIComponent(categoryName)}&limit=1`, { optional: true });
+  if (existing?.[0]?.id) return existing[0].id;
+  const created = await supabaseUpsert("categories", { name: categoryName, is_active: true }, "name");
+  return created?.[0]?.id || "";
+}
+
+async function dbUpsertProduct(product) {
+  const categoryId = await dbEnsureCategory(product.category);
+  const userId = await dbEnsureProfile();
+  const productPayload = {
+    id: product.id,
+    name: product.name,
+    sku: product.sku || null,
+    category_id: categoryId,
+    sale_price: product.salePrice,
+    purchase_cost: product.purchaseCost,
+    purchase_cost_total: product.purchaseCostTotal || product.purchaseCost * product.quantity,
+    status: dbProductStatus(product.status, product.quantity),
+    supplier_name: product.supplier || null,
+    image_url: product.imageUrl || null,
+    created_by: userId || null,
+    updated_at: new Date().toISOString(),
+  };
+  const savedProduct = await supabaseUpsert("products", productPayload, "id");
+  const productId = savedProduct?.[0]?.id || product.id;
+  await supabaseUpsert("inventory", {
+    product_id: productId,
+    current_quantity: product.quantity,
+    min_quantity: product.minQuantity,
+    ideal_quantity: product.idealQuantity,
+    inventory_date: product.inventoryDate,
+    week_start: product.weekStart,
+    week_end: product.weekEnd,
+    updated_at: new Date().toISOString(),
+  }, "product_id");
+  return productId;
+}
+
+async function dbDisableProduct(product) {
+  await supabasePatch("products", product.id, {
+    status: "discontinued",
+    updated_at: new Date().toISOString(),
+  });
+  await supabasePatchWhere("inventory", `product_id=eq.${encodeURIComponent(product.id)}`, {
+    current_quantity: 0,
+    updated_at: new Date().toISOString(),
+  });
+}
+
+async function dbRecordInventoryMovement(product, amount, previousQuantity, reason = "Surtido") {
+  const userId = await dbEnsureProfile();
+  await supabasePatchWhere("inventory", `product_id=eq.${encodeURIComponent(product.id)}`, {
+    current_quantity: product.quantity,
+    inventory_date: product.inventoryDate,
+    week_start: product.weekStart,
+    week_end: product.weekEnd,
+    updated_at: new Date().toISOString(),
+  });
+  await supabaseInsert("inventory_movements", {
+    product_id: product.id,
+    user_id: userId,
+    movement_type: amount >= 0 ? "purchase" : "sale",
+    quantity_change: amount,
+    previous_quantity: previousQuantity,
+    new_quantity: product.quantity,
+    reason,
+  });
+}
+
+async function dbOpenCashRegister(cash) {
+  const userId = await dbEnsureProfile();
+  const saved = await supabaseInsert("cash_registers", {
+    opened_by: userId,
+    opened_at: cash.openedAt,
+    initial_amount: cash.initialAmount,
+    cash_total: cash.cashTotal,
+    transfer_total: cash.transferTotal,
+    expense_total: cash.expenses,
+    status: "open",
+    notes: cash.notes || null,
+  });
+  return saved?.[0]?.id || cash.id;
+}
+
+async function dbUpdateCashRegister(cash) {
+  if (!cash?.id) return;
+  await supabasePatch("cash_registers", cash.id, {
+    closed_at: cash.closedAt,
+    initial_amount: cash.initialAmount,
+    cash_total: cash.cashTotal,
+    transfer_total: cash.transferTotal,
+    expense_total: cash.expenses,
+    counted_amount: cash.countedAmount,
+    difference: cash.difference,
+    status: dbCashStatus(cash.status),
+    notes: cash.notes || null,
+  });
+}
+
+async function dbInsertCashMovement(movement) {
+  if (!state.cashRegister?.id || !movement?.category || !movement?.relatedId) return;
+  const userId = await dbEnsureProfile();
+  const movementType = movement.category === "gasto" ? "expense" : movement.category === "ajuste" ? "adjustment" : "manual_income";
+  await supabaseInsert("cash_movements", {
+    cash_register_id: state.cashRegister.id,
+    user_id: userId,
+    sale_id: movement.relatedTable === "sales" ? movement.relatedId : null,
+    movement_type: movement.category === "venta_producto" ? "sale" : movementType,
+    payment_method: dbPaymentMethod(movement.paymentMethod || "cash"),
+    amount: movement.amount,
+    description: movement.description || reportCategoryLabel(movement.category),
+    type: movement.type || "income",
+    category: movement.category,
+    payment_method_text: movement.paymentMethod || "cash",
+    related_table: movement.relatedTable,
+    related_id: movement.relatedId,
+    is_initial_import: false,
+    occurred_at: movement.occurredAt || new Date().toISOString(),
+  });
+}
+
+async function dbCreateSale(items, paymentMethod, createdAt) {
+  const userId = await dbEnsureProfile();
+  const totalAmount = items.reduce((sum, item) => sum + item.product.salePrice * item.quantity, 0);
+  const totalCost = items.reduce((sum, item) => sum + item.product.purchaseCost * item.quantity, 0);
+  const savedSale = await supabaseInsert("sales", {
+    cash_register_id: state.cashRegister.id,
+    user_id: userId,
+    payment_method: dbPaymentMethod(paymentMethod),
+    total_amount: totalAmount,
+    total_cost: totalCost,
+    gross_profit: totalAmount - totalCost,
+    status: "completed",
+    created_at: createdAt,
+  });
+  const saleId = savedSale?.[0]?.id;
+  if (!saleId) throw new Error("No se pudo crear la venta en Supabase.");
+
+  await Promise.all(items.map(({ product, quantity }) => supabaseInsert("sale_items", {
+    sale_id: saleId,
+    product_id: product.id,
+    quantity,
+    unit_price: product.salePrice,
+    unit_cost: product.purchaseCost,
+    subtotal: product.salePrice * quantity,
+    profit: (product.salePrice - product.purchaseCost) * quantity,
+  })));
+
+  await Promise.all(items.map(({ product, quantity, previousQuantity }) => dbRecordInventoryMovement(product, -quantity, previousQuantity, `Venta: ${product.name}`)));
+  await dbUpdateCashRegister(state.cashRegister);
+  await dbInsertCashMovement({
+    type: "income",
+    category: "venta_producto",
+    description: "Venta de productos",
+    amount: totalAmount,
+    paymentMethod,
+    relatedTable: "sales",
+    relatedId: saleId,
+    occurredAt: createdAt,
+  });
+  return saleId;
+}
+
+async function dbUpsertMember(member, { registerIncome = false, renewal = false } = {}) {
+  const clientPayload = {
+    full_name: member.name,
+    normalized_name: normalizeMemberName(member.name),
+    phone: member.phone || null,
+    email: member.email || null,
+    document_number: member.documentId || null,
+    notes: member.notes || null,
+    updated_at: new Date().toISOString(),
+  };
+  const savedClient = await supabaseUpsert("clients", clientPayload, "normalized_name");
+  const clientId = savedClient?.[0]?.id || member.clientId;
+  const membershipPayload = {
+    id: member.id,
+    client_id: clientId,
+    plan: member.plan || "Mensual",
+    start_date: member.acquiredAt,
+    end_date: member.expiresAt,
+    status: getImportedMembershipStatus(member.expiresAt),
+    price: MEMBERSHIP_PRICE,
+    payment_method: "cash",
+    notes: member.notes || null,
+    is_initial_import: false,
+    updated_at: new Date().toISOString(),
+  };
+  const savedMembership = await supabaseUpsert("memberships", membershipPayload, "id");
+  const membershipId = savedMembership?.[0]?.id || member.id;
+
+  if (registerIncome) {
+    await dbRegisterMembershipIncome({ ...member, id: membershipId, clientId }, renewal);
+  }
+
+  return { id: membershipId, clientId };
+}
+
+async function dbRegisterMembershipIncome(member, renewal = false) {
+  ensureMembershipCashRegister();
+  if (!state.cashRegister.id) state.cashRegister.id = await dbOpenCashRegister(state.cashRegister);
+  state.cashRegister.cashTotal += MEMBERSHIP_PRICE;
+  await dbUpdateCashRegister(state.cashRegister);
+  await dbInsertCashMovement({
+    type: "income",
+    category: renewal ? "renovacion_membresia" : "membresia_nueva",
+    description: renewal ? `Renovacion de membresia - ${member.name}` : `Nueva membresia - ${member.name}`,
+    amount: MEMBERSHIP_PRICE,
+    paymentMethod: "cash",
+    relatedTable: "memberships",
+    relatedId: member.id,
+    occurredAt: new Date().toISOString(),
+  });
+}
+
+async function dbDeleteMembership(member) {
+  await supabaseDeleteWhere("memberships", `id=eq.${encodeURIComponent(member.id)}`);
+}
+
+function normalizeDbName(value = "") {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function localRoleFromDb(role) {
+  if (role === "superadmin") return "super-admin";
+  if (role === "admin") return "admin";
+  return "operator";
+}
+
+function dbRoleFromLocal(role) {
+  if (role === "super-admin") return "superadmin";
+  if (role === "admin") return "admin";
+  return "cashier";
+}
+
+function localProductStatus(status) {
+  if (status === "out_of_stock") return "agotado";
+  if (status === "discontinued") return "inactivo";
+  return "activo";
+}
+
+function dbProductStatus(status, quantity = 0) {
+  if (status === "inactivo") return "discontinued";
+  if (status === "agotado" || quantity <= 0) return "out_of_stock";
+  return "active";
+}
+
+function localCashStatus(status) {
+  if (status === "closed" || status === "reviewed") return "cerrada";
+  return "abierta";
+}
+
+function dbCashStatus(status) {
+  return status === "cerrada" ? "closed" : "open";
+}
+
+function dbPaymentMethod(method) {
+  return method === "transfer" ? "transfer" : "cash";
+}
+
+function localPaymentMethod(method) {
+  return method === "transfer" ? "transfer" : "cash";
+}
+
+async function hydrateFromSupabase() {
+  if (!supabaseConfigured()) {
+    state.booting = false;
+    state.supabase.status = "error";
+    state.supabase.message = "Faltan SUPABASE_URL y SUPABASE_ANON_KEY en Vercel.";
+    render();
+    return;
+  }
+
+  try {
+    const [
+      profiles,
+      categories,
+      products,
+      inventory,
+      cashRegisters,
+      sales,
+      saleItems,
+      cashMovements,
+      inventoryMovements,
+      clients,
+      memberships,
+    ] = await Promise.all([
+      supabaseSelect("profiles", "select=id,full_name,role,status,pin&order=created_at.asc", { optional: true }),
+      supabaseSelect("categories", "select=id,name,is_active&order=name.asc", { optional: true }),
+      supabaseSelect("products", "select=id,name,sku,category_id,sale_price,purchase_cost,purchase_cost_total,status,supplier_name,image_url,updated_at&order=name.asc", { optional: true }),
+      supabaseSelect("inventory", "select=product_id,current_quantity,min_quantity,ideal_quantity,inventory_date,week_start,week_end,updated_at", { optional: true }),
+      supabaseSelect("cash_registers", "select=*&order=opened_at.desc&limit=1", { optional: true }),
+      supabaseSelect("sales", "select=*&order=created_at.desc&limit=1000", { optional: true }),
+      supabaseSelect("sale_items", "select=*&order=created_at.desc&limit=2000", { optional: true }),
+      supabaseSelect("cash_movements", "select=*&order=created_at.desc&limit=1000", { optional: true }),
+      supabaseSelect("inventory_movements", "select=*&order=created_at.desc&limit=1000", { optional: true }),
+      supabaseSelect("clients", "select=*", { optional: true }),
+      supabaseSelect("memberships", "select=*", { optional: true }),
+    ]);
+
+    applyRemoteProfiles(profiles || []);
+    applyRemoteProducts(categories || [], products || [], inventory || []);
+    applyRemoteCashRegister((cashRegisters || [])[0] || null);
+    applyRemoteSales(sales || [], saleItems || []);
+    applyRemoteCashMovements(cashMovements || []);
+    applyRemoteInventoryMovements(inventoryMovements || []);
+    applyRemoteMemberships(clients || [], memberships || []);
+
+    state.booting = false;
+    state.supabase.status = "connected";
+    state.supabase.message = "Datos cargados desde Supabase.";
+    state.supabase.checkedAt = new Date().toISOString();
+    saveState();
+    render();
+  } catch (error) {
+    state.booting = false;
+    state.supabase.status = "error";
+    state.supabase.message = `No se pudo cargar Supabase: ${String(error.message || error).slice(0, 120)}`;
+    state.supabase.checkedAt = new Date().toISOString();
+    saveState();
+    render();
+  }
+}
+
+function applyRemoteProfiles(profiles) {
+  if (!profiles.length) return;
+  state.users = profiles.map((profile) => ({
+    id: profile.id,
+    name: profile.full_name,
+    role: localRoleFromDb(profile.role),
+    pin: profile.pin || "",
+  }));
+  if (!state.users.some((user) => user.id === state.currentUserId)) {
+    const superAdmin = state.users.find((user) => user.role === "super-admin") || state.users[0];
+    state.currentUserId = superAdmin?.id || "";
+  }
+  const user = activeUser();
+  state.user = { name: user.name, role: user.role };
+}
+
+function applyRemoteProducts(categories, products, inventory) {
+  const categoriesById = new Map(categories.map((category) => [category.id, category.name]));
+  const inventoryByProduct = new Map(inventory.map((item) => [item.product_id, item]));
+  state.dbCategories = categories;
+  state.products = products.map((product) => {
+    const stock = inventoryByProduct.get(product.id) || {};
+    return withInventoryWeek({
+      id: product.id,
+      name: product.name,
+      sku: product.sku || "",
+      category: categoriesById.get(product.category_id) || "Inventario",
+      salePrice: Number(product.sale_price || 0),
+      purchaseCost: Number(product.purchase_cost || 0),
+      purchaseCostTotal: Number(product.purchase_cost_total || 0),
+      quantity: Number(stock.current_quantity || 0),
+      minQuantity: Number(stock.min_quantity || 0),
+      idealQuantity: Number(stock.ideal_quantity || 0),
+      supplier: product.supplier_name || "",
+      status: localProductStatus(product.status),
+      imageUrl: product.image_url || "",
+      inventoryDate: stock.inventory_date || getInventoryWeek().inventoryDate,
+      weekStart: stock.week_start || getInventoryWeek().weekStart,
+      weekEnd: stock.week_end || getInventoryWeek().weekEnd,
+    });
+  });
+}
+
+function applyRemoteCashRegister(cash) {
+  if (!cash) {
+    state.cashRegister = null;
+    return;
+  }
+
+  state.cashRegister = {
+    id: cash.id,
+    status: localCashStatus(cash.status),
+    openedAt: cash.opened_at,
+    closedAt: cash.closed_at,
+    initialAmount: Number(cash.initial_amount || 0),
+    cashTotal: Number(cash.cash_total || 0),
+    transferTotal: Number(cash.transfer_total || 0),
+    expenses: Number(cash.expense_total || 0),
+    countedAmount: cash.counted_amount === null ? null : Number(cash.counted_amount),
+    difference: cash.difference === null ? null : Number(cash.difference),
+    notes: cash.notes || "",
   };
 }
 
-function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+function applyRemoteSales(sales, saleItems) {
+  const salesById = new Map(sales.map((sale) => [sale.id, sale]));
+  state.sales = saleItems
+    .map((item) => {
+      const sale = salesById.get(item.sale_id);
+      if (!sale || sale.status === "voided") return null;
+      return {
+        id: item.id,
+        transactionId: sale.id,
+        productId: item.product_id,
+        productName: item.product_name || state.products.find((product) => product.id === item.product_id)?.name || "Producto",
+        quantity: Number(item.quantity || 0),
+        paymentMethod: localPaymentMethod(sale.payment_method),
+        total: Number(item.subtotal || item.total_amount || 0),
+        cost: Number(item.unit_cost || 0) * Number(item.quantity || 0),
+        profit: Number(item.profit || 0),
+        createdAt: sale.created_at,
+      };
+    })
+    .filter(Boolean);
+}
+
+function applyRemoteCashMovements(cashMovements) {
+  state.cashMovements = cashMovements.map((movement) => ({
+    id: movement.id,
+    type: movement.type || (movement.movement_type === "expense" ? "expense" : "income"),
+    category: movement.category || dbMovementCategory(movement),
+    description: movement.description || "",
+    amount: Number(movement.amount || 0),
+    paymentMethod: movement.payment_method_text || localPaymentMethod(movement.payment_method),
+    relatedTable: movement.related_table || (movement.sale_id ? "sales" : ""),
+    relatedId: movement.related_id || movement.sale_id || movement.id,
+    isInitialImport: Boolean(movement.is_initial_import),
+    occurredAt: movement.occurred_at || movement.created_at,
+    createdAt: movement.created_at,
+  }));
+}
+
+function dbMovementCategory(movement) {
+  if (movement.movement_type === "sale") return "venta_producto";
+  if (movement.movement_type === "expense") return "gasto";
+  return "otro_ingreso";
+}
+
+function applyRemoteInventoryMovements(inventoryMovements) {
+  const productById = new Map(state.products.map((product) => [product.id, product]));
+  const inventoryHistory = inventoryMovements.map((movement) => {
+    const product = productById.get(movement.product_id);
+    return {
+      id: movement.id,
+      type: "inventario",
+      description: movement.reason || `Inventario: ${product?.name || "Producto"} ${movement.quantity_change > 0 ? "+" : ""}${movement.quantity_change}`,
+      amount: 0,
+      userName: "Sistema",
+      createdAt: movement.created_at,
+    };
+  });
+  const cashHistory = (state.cashMovements || []).map((movement) => ({
+    id: movement.id,
+    type: movement.category === "venta_producto" ? "venta" : movement.category?.includes("membresia") ? "membresia" : "caja",
+    description: movement.description || reportCategoryLabel(movement.category),
+    amount: movement.amount,
+    userName: "Sistema",
+    createdAt: movement.occurredAt || movement.createdAt,
+  }));
+  state.movements = [...cashHistory, ...inventoryHistory].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+}
+
+function applyRemoteMemberships(clients, memberships) {
+  const clientsById = new Map(clients.map((client) => [client.id, client]));
+  state.members = memberships.map((membership) => {
+    const client = clientsById.get(membership.client_id) || {};
+    return {
+      id: membership.id,
+      clientId: membership.client_id,
+      name: client.full_name || "Miembro",
+      phone: client.phone || "",
+      documentId: client.document_number || "",
+      email: client.email || "",
+      plan: membership.plan || "Mensual",
+      acquiredAt: membership.start_date,
+      expiresAt: membership.end_date,
+      status: membership.status || getImportedMembershipStatus(membership.end_date),
+      price: Number(membership.price || MEMBERSHIP_PRICE),
+      notes: membership.notes || client.notes || "",
+      isInitialImport: Boolean(membership.is_initial_import),
+      createdAt: membership.created_at,
+      updatedAt: membership.updated_at,
+    };
+  });
 }
 
 function formatCurrency(value) {
@@ -596,16 +921,11 @@ function withInventoryWeek(product) {
   const week = getInventoryWeek(product.inventoryDate || new Date());
   return {
     ...product,
-    imageUrl: product.imageUrl || productImageUrl(product),
+    imageUrl: product.imageUrl || "",
     inventoryDate: product.inventoryDate || week.inventoryDate,
     weekStart: product.weekStart || week.weekStart,
     weekEnd: product.weekEnd || week.weekEnd,
   };
-}
-
-function productImageUrl(product) {
-  const productText = [product.name, product.sku, product.category].filter(Boolean).join(" ").toLowerCase();
-  return PRODUCT_IMAGE_ASSETS.find((asset) => asset.keys.some((key) => productText.includes(key)))?.url || "";
 }
 
 function weekLabel(product) {
@@ -817,6 +1137,10 @@ function renderToastNotification() {
 
 function render() {
   const app = document.querySelector("#app");
+  if (state.booting) {
+    app.innerHTML = renderLoadingScreen();
+    return;
+  }
   if (!state.sessionActive) {
     app.innerHTML = renderLoginScreen();
     bindLoginEvents();
@@ -843,6 +1167,24 @@ function render() {
   bindEvents();
 }
 
+function renderLoadingScreen() {
+  return `
+    <main class="login-screen">
+      <section class="login-card">
+        <div class="login-brand">
+          <strong>BODY FI<span>T</span></strong>
+          <p>Conectando con Supabase</p>
+        </div>
+        <div class="empty-state">
+          ${icon("connection")}
+          <strong>Cargando datos reales</strong>
+          <span>La información viene desde la base de datos.</span>
+        </div>
+      </section>
+    </main>
+  `;
+}
+
 function renderLoginScreen() {
   return `
     <main class="login-screen">
@@ -858,18 +1200,16 @@ function renderLoginScreen() {
         <form id="login-form" class="login-form">
           <div class="field">
             <label for="loginUser">Usuario</label>
-            ${renderPremiumSelect("loginUser", "loginUser", state.users.map((user) => ({ value: user.id, label: `${user.name} · ${roleLabel(user.role)}` })))}
+            ${state.users.length
+              ? renderPremiumSelect("loginUser", "loginUser", state.users.map((user) => ({ value: user.id, label: `${user.name} · ${roleLabel(user.role)}` })))
+              : `<div class="notice">No hay usuarios cargados desde Supabase.</div>`}
           </div>
           <div class="field">
             <label for="loginPin">PIN</label>
             <input id="loginPin" name="loginPin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="Ingresa tu PIN" required />
           </div>
-          <button class="button login-submit" type="submit">${icon("login")}<span>Ingresar al sistema</span></button>
+          <button class="button login-submit" type="submit" ${state.users.length ? "" : "disabled"}>${icon("login")}<span>Ingresar al sistema</span></button>
         </form>
-        <div class="login-demo">
-          <strong>Accesos de demostración</strong>
-          <span>Super Admin: 1234 · Admin: 2345 · Operador: 3456</span>
-        </div>
       </section>
     </main>
   `;
@@ -3340,27 +3680,13 @@ function renderConnection() {
       <div class="panel-header">
         <div>
           <h2>Conexion Supabase</h2>
-          <p>Guarda la URL del proyecto y la llave publica anon para probar la base de datos.</p>
+          <p>La conexion se lee desde variables de entorno en Vercel.</p>
         </div>
         <span class="status ${tone}">${connectionLabel()}</span>
       </div>
       <div class="notice">
-        Usa la llave publica anon de Supabase. No pegues aqui la service_role key porque esa llave es privada del servidor.
+        La llave anon publica no vive en el codigo fuente. Vercel la entrega al navegador desde <strong>/api/config.js</strong>. La llave <strong>service_role</strong> no se usa en la web.
       </div>
-      <form id="supabase-form" class="connection-form">
-        <div class="field">
-          <label for="supabaseUrl">URL del proyecto</label>
-          <input id="supabaseUrl" name="supabaseUrl" type="url" required value="${state.supabase.url}" />
-        </div>
-        <div class="field">
-          <label for="supabaseAnonKey">Llave publica anon</label>
-          <input id="supabaseAnonKey" name="supabaseAnonKey" type="password" placeholder="eyJ..." value="${state.supabase.anonKey}" autocomplete="off" />
-        </div>
-        <div class="actions">
-          <button class="button" type="submit">Guardar y probar</button>
-          <button class="button secondary" type="button" id="clear-supabase">Limpiar</button>
-        </div>
-      </form>
     </section>
 
     <section class="grid-2">
@@ -3373,7 +3699,7 @@ function renderConnection() {
         </div>
         <div class="list-item">
           <strong>${state.supabase.message}</strong>
-          <span>${state.supabase.url}</span>
+          <span>${state.supabase.url || "Sin SUPABASE_URL"}</span>
         </div>
       </div>
       <div class="panel">
@@ -3385,16 +3711,16 @@ function renderConnection() {
         </div>
         <div class="list">
           <div class="list-item">
-            <strong>1. Abre Supabase SQL Editor</strong>
-            <span>Copia y ejecuta el contenido de supabase/schema.sql.</span>
+            <strong>1. Variables en Vercel</strong>
+            <span>SUPABASE_URL y SUPABASE_ANON_KEY deben estar configuradas para Production y Preview.</span>
           </div>
           <div class="list-item">
-            <strong>2. Pega la anon key</strong>
-            <span>Project Settings > API > anon public.</span>
+            <strong>2. Base de datos</strong>
+            <span>Los productos, caja, ventas, membresias y movimientos se cargan desde Supabase.</span>
           </div>
           <div class="list-item">
-            <strong>3. Prueba conexion</strong>
-            <span>La app consulta la tabla categories para confirmar acceso.</span>
+            <strong>3. Seguridad</strong>
+            <span>No usar service_role en Vercel ni en el navegador.</span>
           </div>
         </div>
       </div>
@@ -3552,8 +3878,6 @@ function bindEvents() {
   document.querySelectorAll("[data-cancel-sale]").forEach((button) => {
     button.addEventListener("click", cancelSale);
   });
-  document.querySelector("#supabase-form")?.addEventListener("submit", saveSupabaseConfig);
-  document.querySelector("#clear-supabase")?.addEventListener("click", clearSupabaseConfig);
   document.querySelector("#toggle-inventory-files")?.addEventListener("click", toggleInventoryFileTools);
   document.querySelector("#import-inventory-file")?.addEventListener("click", importInventoryFile);
   document.querySelector("#export-inventory-file")?.addEventListener("click", exportInventoryCsv);
@@ -3708,7 +4032,7 @@ function dismissToastAfterDelay() {
   }, 2600);
 }
 
-function addSystemUser(event) {
+async function addSystemUser(event) {
   event.preventDefault();
   if (!requirePermission("users-manage")) return;
   const data = Object.fromEntries(new FormData(event.currentTarget));
@@ -3720,21 +4044,34 @@ function addSystemUser(event) {
     return;
   }
 
-  state.users.push({ id: crypto.randomUUID(), name, role: data.accountRole, pin });
-  addMovement("sesion", `Usuario creado: ${name} (${roleLabel(data.accountRole)})`);
-  saveState();
-  render();
+  try {
+    await supabaseInsert("profiles", {
+      full_name: name,
+      role: dbRoleFromLocal(data.accountRole),
+      status: "active",
+      pin,
+    });
+    state.toast = `Usuario creado: ${name}`;
+    await hydrateFromSupabase();
+    dismissToastAfterDelay();
+  } catch (error) {
+    alert(`No se pudo crear el usuario en Supabase: ${error.message}`);
+  }
 }
 
-function deleteSystemUser(userId) {
+async function deleteSystemUser(userId) {
   if (!requirePermission("users-manage")) return;
   const user = state.users.find((item) => item.id === userId);
-  if (!user || user.id === state.currentUserId || user.id === "super-admin") return;
+  if (!user || user.id === state.currentUserId || user.role === "super-admin") return;
   if (!confirm(`¿Eliminar el acceso de ${user.name}?`)) return;
-  state.users = state.users.filter((item) => item.id !== userId);
-  addMovement("sesion", `Usuario eliminado: ${user.name}`);
-  saveState();
-  render();
+  try {
+    await supabaseDeleteWhere("profiles", `id=eq.${encodeURIComponent(userId)}`);
+    state.toast = `Usuario eliminado: ${user.name}`;
+    await hydrateFromSupabase();
+    dismissToastAfterDelay();
+  } catch (error) {
+    alert(`No se pudo eliminar el usuario en Supabase: ${error.message}`);
+  }
 }
 
 function filterProductSearch(event) {
@@ -3752,7 +4089,7 @@ function filterProductSearch(event) {
   empty?.classList.toggle("visible", visibleCount === 0);
 }
 
-function addMember(event) {
+async function addMember(event) {
   event.preventDefault();
   if (!requirePermission("memberships")) return;
   const memberData = collectMemberFormData(event.currentTarget);
@@ -3775,16 +4112,22 @@ function addMember(event) {
   const member = {
     id: crypto.randomUUID(),
     ...memberData,
+    expiresAt: addMonths(memberData.acquiredAt, membershipPlanMonths(memberData.plan)),
+    status: "activa",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
 
-  state.members.push(member);
-  registerMembershipIncome(member, "membership");
-  state.toast = "Membresia registrada correctamente.";
-  saveState();
-  render();
-  dismissToastAfterDelay();
+  try {
+    await dbUpsertMember(member, { registerIncome: true });
+    state.memberModalMode = "";
+    state.selectedMemberId = "";
+    state.toast = "Membresia registrada correctamente.";
+    await hydrateFromSupabase();
+    dismissToastAfterDelay();
+  } catch (error) {
+    alert(`No se pudo guardar la membresia en Supabase: ${error.message}`);
+  }
 }
 
 function collectMemberFormData(form) {
@@ -3816,7 +4159,7 @@ function closeMemberModal() {
   render();
 }
 
-function saveMemberEdit(event) {
+async function saveMemberEdit(event) {
   event.preventDefault();
   if (!requirePermission("memberships")) return;
   const member = state.members.find((item) => item.id === state.selectedMemberId);
@@ -3839,17 +4182,26 @@ function saveMemberEdit(event) {
     return;
   }
 
-  Object.assign(member, memberData, { updatedAt: new Date().toISOString() });
-  addMovement("membresia", `Membresia actualizada: ${member.name}`);
-  state.memberModalMode = "";
-  state.selectedMemberId = "";
-  state.toast = "Membresia actualizada correctamente.";
-  saveState();
-  render();
-  dismissToastAfterDelay();
+  const updatedMember = {
+    ...member,
+    ...memberData,
+    expiresAt: addMonths(memberData.acquiredAt, membershipPlanMonths(memberData.plan)),
+    updatedAt: new Date().toISOString(),
+  };
+
+  try {
+    await dbUpsertMember(updatedMember);
+    state.memberModalMode = "";
+    state.selectedMemberId = "";
+    state.toast = "Membresia actualizada correctamente.";
+    await hydrateFromSupabase();
+    dismissToastAfterDelay();
+  } catch (error) {
+    alert(`No se pudo actualizar la membresia en Supabase: ${error.message}`);
+  }
 }
 
-function confirmRenewMembership() {
+async function confirmRenewMembership() {
   if (!requirePermission("memberships")) return;
   const member = state.members.find((item) => item.id === state.selectedMemberId);
   if (!member) {
@@ -3865,16 +4217,19 @@ function confirmRenewMembership() {
   member.renewedAt = new Date().toISOString();
   member.updatedAt = new Date().toISOString();
 
-  registerMembershipIncome(member, "membership_renewal");
-  state.memberModalMode = "";
-  state.selectedMemberId = "";
-  state.toast = "Membresia renovada correctamente.";
-  saveState();
-  render();
-  dismissToastAfterDelay();
+  try {
+    await dbUpsertMember(member, { registerIncome: true, renewal: true });
+    state.memberModalMode = "";
+    state.selectedMemberId = "";
+    state.toast = "Membresia renovada correctamente.";
+    await hydrateFromSupabase();
+    dismissToastAfterDelay();
+  } catch (error) {
+    alert(`No se pudo renovar la membresia en Supabase: ${error.message}`);
+  }
 }
 
-function confirmDeleteMembership() {
+async function confirmDeleteMembership() {
   if (!requirePermission("memberships")) return;
   const member = state.members.find((item) => item.id === state.selectedMemberId);
   if (!member) {
@@ -3882,14 +4237,16 @@ function confirmDeleteMembership() {
     return;
   }
 
-  state.members = state.members.filter((item) => item.id !== member.id);
-  addMovement("membresia", `Membresia eliminada: ${member.name}`);
-  state.memberModalMode = "";
-  state.selectedMemberId = "";
-  state.toast = "Membresia eliminada correctamente.";
-  saveState();
-  render();
-  dismissToastAfterDelay();
+  try {
+    await dbDeleteMembership(member);
+    state.memberModalMode = "";
+    state.selectedMemberId = "";
+    state.toast = "Membresia eliminada correctamente.";
+    await hydrateFromSupabase();
+    dismissToastAfterDelay();
+  } catch (error) {
+    alert(`No se pudo eliminar la membresia en Supabase: ${error.message}`);
+  }
 }
 
 function registerMembershipIncome(member, category) {
@@ -4017,19 +4374,20 @@ async function addProduct(event) {
   }
 
   if (editingProduct) {
-    Object.assign(editingProduct, product);
-    addMovement("inventario", `Producto editado: ${product.name}`);
     state.toast = `Producto actualizado: ${product.name}`;
   } else {
-    state.products.push(product);
-    addMovement("inventario", `Producto creado: ${product.name}`);
     state.toast = `Producto agregado: ${product.name}`;
   }
 
-  state.newProductModalOpen = false;
-  state.editingProductId = "";
-  saveState();
-  render();
+  try {
+    await dbUpsertProduct(product);
+    state.newProductModalOpen = false;
+    state.editingProductId = "";
+    await hydrateFromSupabase();
+    dismissToastAfterDelay();
+  } catch (error) {
+    alert(`No se pudo guardar el producto en Supabase: ${error.message}`);
+  }
 }
 
 function readProductImage(file) {
@@ -4067,17 +4425,20 @@ async function previewProductImage(event) {
   }
 }
 
-function deleteProduct(productId) {
+async function deleteProduct(productId) {
   if (!requirePermission("inventory-edit")) return;
   const product = state.products.find((item) => item.id === productId);
   if (!product) return;
   if (!confirm(`¿Eliminar ${product.name} del inventario?`)) return;
 
-  state.products = state.products.filter((item) => item.id !== productId);
-  addMovement("inventario", `Producto eliminado: ${product.name}`);
-  state.toast = `Producto eliminado: ${product.name}`;
-  saveState();
-  render();
+  try {
+    await dbDisableProduct(product);
+    state.toast = `Producto inhabilitado: ${product.name}`;
+    await hydrateFromSupabase();
+    dismissToastAfterDelay();
+  } catch (error) {
+    alert(`No se pudo inhabilitar el producto en Supabase: ${error.message}`);
+  }
 }
 
 function toggleInventoryFileTools() {
@@ -4108,10 +4469,9 @@ async function importInventoryFile() {
     }
 
     const result = upsertInventoryProducts(products);
-    state.inventoryFileMessage = `Archivo importado: ${result.created} creados, ${result.updated} actualizados.`;
-    addMovement("inventario", `Inventario importado desde archivo: ${result.created} creados, ${result.updated} actualizados`);
-    saveState();
-    render();
+    await Promise.all(products.map((product) => dbUpsertProduct(product)));
+    state.inventoryFileMessage = `Archivo importado en Supabase: ${result.created} creados, ${result.updated} actualizados.`;
+    await hydrateFromSupabase();
   } catch (error) {
     state.inventoryFileMessage = `No pude leer el archivo: ${error.message}`;
     saveState();
@@ -4469,8 +4829,7 @@ function parseMenuLikeDocx(lines) {
     });
   });
 
-  const menuFallback = products.length ? products : menuCafProducts;
-  return menuFallback.filter((product, index, list) => list.findIndex((item) => item.name === product.name) === index);
+  return products.filter((product, index, list) => list.findIndex((item) => item.name === product.name) === index);
 }
 
 function cleanProductName(value) {
@@ -4554,7 +4913,7 @@ function closeStockModal() {
   render();
 }
 
-function confirmStockSupply(event) {
+async function confirmStockSupply(event) {
   event.preventDefault();
   if (!requirePermission("inventory-edit")) return;
   const product = state.products.find((item) => item.id === state.stockProductId);
@@ -4567,83 +4926,23 @@ function confirmStockSupply(event) {
     return;
   }
 
+  const previousQuantity = product.quantity;
   product.quantity += amount;
   product.status = "activo";
   Object.assign(product, getInventoryWeek());
-  state.stockProductId = "";
-  addMovement("inventario", `Surtido: ${product.name} +${amount}`);
-  saveState();
-  render();
-}
-
-async function saveSupabaseConfig(event) {
-  event.preventDefault();
-  if (!requirePermission("connection")) return;
-  const data = Object.fromEntries(new FormData(event.currentTarget));
-  state.supabase.url = data.supabaseUrl.trim().replace(/\/$/, "");
-  state.supabase.anonKey = data.supabaseAnonKey.trim();
-  state.supabase.status = "pending";
-  state.supabase.message = "Probando conexion...";
-  state.supabase.checkedAt = new Date().toISOString();
-  saveState();
-  render();
-
-  await testSupabaseConnection();
-}
-
-function clearSupabaseConfig() {
-  if (!requirePermission("connection")) return;
-  state.supabase = {
-    url: DEFAULT_SUPABASE_URL,
-    anonKey: DEFAULT_SUPABASE_ANON_KEY,
-    status: "pending",
-    message: "Llave publica anon configurada.",
-    checkedAt: null,
-  };
-  saveState();
-  render();
-}
-
-async function testSupabaseConnection() {
-  if (!supabaseConfigured()) {
-    state.supabase.status = "error";
-    state.supabase.message = "Falta la URL o la llave publica anon.";
-    state.supabase.checkedAt = new Date().toISOString();
-    saveState();
-    render();
-    return;
-  }
 
   try {
-    const response = await fetch(`${state.supabase.url}/rest/v1/categories?select=id,name&limit=1`, {
-      headers: {
-        apikey: state.supabase.anonKey,
-        Authorization: `Bearer ${state.supabase.anonKey}`,
-      },
-    });
-
-    if (response.ok) {
-      state.supabase.status = "connected";
-      state.supabase.message = "Conexion lista. Supabase respondio correctamente.";
-    } else if (response.status === 404) {
-      state.supabase.status = "error";
-      state.supabase.message = "Supabase respondio, pero falta crear la tabla categories con supabase/schema.sql.";
-    } else {
-      const details = await response.text();
-      state.supabase.status = "error";
-      state.supabase.message = `No se pudo conectar. Codigo ${response.status}. ${details.slice(0, 120)}`;
-    }
-  } catch {
-    state.supabase.status = "error";
-    state.supabase.message = "No se pudo llegar a Supabase. Revisa internet, URL y permisos CORS/API.";
+    await dbRecordInventoryMovement(product, amount, previousQuantity, `Surtido: ${product.name} +${amount}`);
+    state.stockProductId = "";
+    state.toast = `Surtido confirmado: ${product.name} +${amount}`;
+    await hydrateFromSupabase();
+    dismissToastAfterDelay();
+  } catch (error) {
+    alert(`No se pudo registrar el surtido en Supabase: ${error.message}`);
   }
-
-  state.supabase.checkedAt = new Date().toISOString();
-  saveState();
-  render();
 }
 
-function openCash(event) {
+async function openCash(event) {
   event.preventDefault();
   if (!requirePermission("cash-open")) return;
   const data = Object.fromEntries(new FormData(event.currentTarget));
@@ -4653,14 +4952,20 @@ function openCash(event) {
     return;
   }
 
-  state.cashRegister = createCashRegister(initialAmount);
+  const cash = createCashRegister(initialAmount);
 
-  addMovement("caja", `Caja abierta con ${formatCurrency(initialAmount)}`, initialAmount);
-  saveState();
-  render();
+  try {
+    cash.id = await dbOpenCashRegister(cash);
+    state.cashRegister = cash;
+    state.toast = `Caja abierta con ${formatCurrency(initialAmount)}.`;
+    await hydrateFromSupabase();
+    dismissToastAfterDelay();
+  } catch (error) {
+    alert(`No se pudo abrir la caja en Supabase: ${error.message}`);
+  }
 }
 
-function closeCash(event) {
+async function closeCash(event) {
   event.preventDefault();
   if (!requirePermission("cash-edit")) return;
   const data = Object.fromEntries(new FormData(event.currentTarget));
@@ -4676,12 +4981,17 @@ function closeCash(event) {
   state.cashRegister.difference = countedAmount - cashExpected();
   state.cashRegister.notes = data.cashNotes.trim();
 
-  addMovement("caja", `Caja cerrada. Diferencia ${formatCurrency(state.cashRegister.difference)}`, state.cashRegister.difference);
-  saveState();
-  render();
+  try {
+    await dbUpdateCashRegister(state.cashRegister);
+    state.toast = "Caja cerrada correctamente.";
+    await hydrateFromSupabase();
+    dismissToastAfterDelay();
+  } catch (error) {
+    alert(`No se pudo cerrar la caja en Supabase: ${error.message}`);
+  }
 }
 
-function editCashOpeningAmount(event) {
+async function editCashOpeningAmount(event) {
   event.preventDefault();
   if (!requirePermission("cash-edit")) return;
   if (!state.cashRegister || state.cashRegister.status !== "abierta") return;
@@ -4696,9 +5006,15 @@ function editCashOpeningAmount(event) {
 
   const previousAmount = state.cashRegister.initialAmount;
   state.cashRegister.initialAmount = correctedAmount;
-  addMovement("caja", `Monto inicial corregido: ${formatCurrency(previousAmount)} a ${formatCurrency(correctedAmount)}. Motivo: ${reason}`);
-  saveState();
-  render();
+  state.cashRegister.notes = `${state.cashRegister.notes || ""} Correccion: ${reason}`.trim();
+  try {
+    await dbUpdateCashRegister(state.cashRegister);
+    state.toast = `Monto inicial corregido de ${formatCurrency(previousAmount)} a ${formatCurrency(correctedAmount)}.`;
+    await hydrateFromSupabase();
+    dismissToastAfterDelay();
+  } catch (error) {
+    alert(`No se pudo corregir la caja en Supabase: ${error.message}`);
+  }
 }
 
 function validateMoney(value, emptyMessage) {
@@ -4715,7 +5031,7 @@ function validateMoney(value, emptyMessage) {
   return true;
 }
 
-function voidCashRegister() {
+async function voidCashRegister() {
   if (!requirePermission("cash-edit")) return;
   if (!state.cashRegister || state.cashRegister.status !== "abierta") return;
 
@@ -4726,14 +5042,22 @@ function voidCashRegister() {
 
   if (!confirm("Esta accion anula la caja abierta y permite abrir una nueva. ¿Continuar?")) return;
 
-  const amount = state.cashRegister.initialAmount;
-  state.cashRegister = null;
-  addMovement("caja", `Caja anulada antes de ventas. Monto inicial eliminado: ${formatCurrency(amount)}`);
-  saveState();
-  render();
+  try {
+    state.cashRegister.status = "cerrada";
+    state.cashRegister.closedAt = new Date().toISOString();
+    state.cashRegister.countedAmount = 0;
+    state.cashRegister.difference = -state.cashRegister.initialAmount;
+    state.cashRegister.notes = "Caja anulada antes de ventas.";
+    await dbUpdateCashRegister(state.cashRegister);
+    state.toast = "Caja anulada correctamente.";
+    await hydrateFromSupabase();
+    dismissToastAfterDelay();
+  } catch (error) {
+    alert(`No se pudo anular la caja en Supabase: ${error.message}`);
+  }
 }
 
-function reopenCashRegister() {
+async function reopenCashRegister() {
   if (!requirePermission("cash-edit")) return;
   if (!state.cashRegister || state.cashRegister.status !== "cerrada") return;
   if (!confirm("La caja cerrada volverá a estado abierta para corrección. ¿Continuar?")) return;
@@ -4742,12 +5066,17 @@ function reopenCashRegister() {
   state.cashRegister.closedAt = null;
   state.cashRegister.countedAmount = null;
   state.cashRegister.difference = null;
-  addMovement("caja", "Caja cerrada reabierta para corrección");
-  saveState();
-  render();
+  try {
+    await dbUpdateCashRegister(state.cashRegister);
+    state.toast = "Caja reabierta para correccion.";
+    await hydrateFromSupabase();
+    dismissToastAfterDelay();
+  } catch (error) {
+    alert(`No se pudo reabrir la caja en Supabase: ${error.message}`);
+  }
 }
 
-function deleteCashRegister() {
+async function deleteCashRegister() {
   if (!requirePermission("cash-edit")) return;
   if (!state.cashRegister) return;
 
@@ -4758,11 +5087,15 @@ function deleteCashRegister() {
 
   if (!confirm("Esto elimina la caja actual del prototipo local y permite abrir otra. ¿Continuar?")) return;
 
-  const amount = state.cashRegister.initialAmount;
-  state.cashRegister = null;
-  addMovement("caja", `Caja eliminada para reapertura. Monto inicial anterior: ${formatCurrency(amount)}`);
-  saveState();
-  render();
+  try {
+    await supabaseDeleteWhere("cash_registers", `id=eq.${encodeURIComponent(state.cashRegister.id)}`);
+    state.cashRegister = null;
+    state.toast = "Caja eliminada correctamente.";
+    await hydrateFromSupabase();
+    dismissToastAfterDelay();
+  } catch (error) {
+    alert(`No se pudo eliminar la caja en Supabase: ${error.message}`);
+  }
 }
 
 function stepSaleQuantity(delta) {
@@ -4882,7 +5215,7 @@ function cancelSale() {
   render();
 }
 
-function confirmSale() {
+async function confirmSale() {
   if (!requirePermission("sales")) return;
   const data = state.pendingSale;
   const items = (data?.items || []).map((item) => {
@@ -4906,30 +5239,19 @@ function confirmSale() {
     return;
   }
 
-  const transactionId = crypto.randomUUID();
   const createdAt = new Date().toISOString();
   let total = 0;
+  const dbItems = [];
 
   items.forEach(({ product, quantity }) => {
     const itemTotal = product.salePrice * quantity;
     const cost = product.purchaseCost * quantity;
+    const previousQuantity = product.quantity;
 
     product.quantity -= quantity;
     product.status = product.quantity === 0 ? "agotado" : "activo";
     total += itemTotal;
-
-    state.sales.push({
-      id: crypto.randomUUID(),
-      transactionId,
-      productId: product.id,
-      productName: product.name,
-      quantity,
-      paymentMethod: data.paymentMethod,
-      total: itemTotal,
-      cost,
-      profit: itemTotal - cost,
-      createdAt,
-    });
+    dbItems.push({ product, quantity, previousQuantity, itemTotal, cost });
   });
 
   if (data.paymentMethod === "cash") {
@@ -4938,21 +5260,19 @@ function confirmSale() {
     state.cashRegister.transferTotal += total;
   }
 
-  addMovement("venta", `Venta: ${items.length} productos · ${items.reduce((sum, item) => sum + item.quantity, 0)} unidades`, total);
-  addCashMovement({
-    category: "venta_producto",
-    description: "Venta de productos",
-    amount: total,
-    paymentMethod: data.paymentMethod,
-    relatedTable: "sales",
-    relatedId: transactionId,
-    occurredAt: createdAt,
-  });
-  state.saleCart = [];
-  state.pendingSale = null;
-  state.toast = `Venta registrada por ${formatCurrency(total)}.`;
-  saveState();
-  render();
+  try {
+    await dbCreateSale(dbItems, data.paymentMethod, createdAt);
+    state.saleCart = [];
+    state.pendingSale = null;
+    state.saleNewPanelOpen = true;
+    state.toast = `Venta registrada por ${formatCurrency(total)}.`;
+    await hydrateFromSupabase();
+    dismissToastAfterDelay();
+  } catch (error) {
+    state.pendingSale = null;
+    alert(`No se pudo registrar la venta en Supabase: ${error.message}`);
+    await hydrateFromSupabase();
+  }
 }
 
 function addMovement(type, description, amount = 0) {
@@ -4996,4 +5316,9 @@ function addCashMovement({
   });
 }
 
-render();
+async function bootstrap() {
+  render();
+  await hydrateFromSupabase();
+}
+
+bootstrap();

@@ -11,5 +11,8 @@ Sources/
 *.log
 *.tmp
 *.swp
+.env
+.env.local
+.env.*.local
 
 Sources/~$*

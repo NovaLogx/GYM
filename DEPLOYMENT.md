@@ -36,15 +36,16 @@ Configuracion recomendada:
 
 El archivo `vercel.json` ya deja lista la app para que cualquier ruta cargue `index.html`.
 
-## 3. Variables de Supabase
+## 3. Variables de Supabase en Vercel
 
-La app ya tiene configurada la URL:
+En Vercel > Project Settings > Environment Variables agregar para `Production` y `Preview`:
 
 ```text
-https://jsettiedrwawrfbeiiei.supabase.co
+SUPABASE_URL=https://jsettiedrwawrfbeiiei.supabase.co
+SUPABASE_ANON_KEY=llave_anon_public
 ```
 
-En produccion se debe usar solo la llave publica `anon`.
+Tambien se aceptan los nombres `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`, pero los recomendados para este proyecto son `SUPABASE_URL` y `SUPABASE_ANON_KEY`.
 
 No usar ni subir la llave `service_role`.
 
@@ -54,8 +55,8 @@ Ejecutar en Supabase SQL Editor, en este orden:
 
 1. `supabase/schema.sql`
 2. `supabase/inventory-week-fields.sql`
-3. `supabase/read-policies.sql`
-4. Seeds necesarios de inventario si aplica.
+3. `supabase/production-supabase-migration.sql`
+4. `supabase/import-initial-memberships-2026.sql`
 
 ## 5. Dominio Cloudflare
 
@@ -90,4 +91,3 @@ Validar en vivo:
 - Membresias registran ingresos cuando corresponda.
 - Reportes muestran movimientos.
 - Supabase responde correctamente desde Configuracion/Conexion.
-
