@@ -253,6 +253,10 @@ function activeUser() {
   return state.users?.find((user) => user.id === state.currentUserId) || state.user || { id: "", name: "Sin sesión", role: "" };
 }
 
+function isUuid(value = "") {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value));
+}
+
 function loginUsers() {
   if (state.users?.length) return state.users;
   return DEFAULT_SYSTEM_USERS.map((user, index) => ({
@@ -377,7 +381,17 @@ function supabaseDeleteWhere(table, filter) {
 
 async function dbEnsureProfile() {
   const user = activeUser();
-  if (user.id) return user.id;
+  if (isUuid(user.id)) return user.id;
+  if (user.name && user.name !== "Sin sesión") {
+    const realProfileId = await dbEnsureSystemUser(user);
+    if (realProfileId) {
+      state.currentUserId = realProfileId;
+      state.user = { ...user, id: realProfileId };
+      const existingIndex = state.users.findIndex((item) => item.name === user.name);
+      if (existingIndex >= 0) state.users[existingIndex] = { ...state.users[existingIndex], id: realProfileId };
+      return realProfileId;
+    }
+  }
   const existing = await supabaseSelect("profiles", "select=id&limit=1", { optional: true });
   if (existing?.[0]?.id) return existing[0].id;
   return dbEnsureSystemUser(DEFAULT_SYSTEM_USERS[0]);
@@ -394,12 +408,36 @@ async function dbEnsureSystemUser(user) {
     pin: null,
     updated_at: new Date().toISOString(),
   };
+  const fallbackPayload = {
+    full_name: payload.full_name,
+    role: payload.role,
+    status: payload.status,
+    updated_at: payload.updated_at,
+  };
   if (existing?.[0]?.id) {
-    const updated = await supabasePatch("profiles", existing[0].id, payload);
+    let updated;
+    try {
+      updated = await supabasePatch("profiles", existing[0].id, payload);
+    } catch (error) {
+      updated = await supabasePatch("profiles", existing[0].id, fallbackPayload);
+    }
     return updated?.[0]?.id || existing[0].id;
   }
-  const created = await supabaseInsert("profiles", payload);
+  let created;
+  try {
+    created = await supabaseInsert("profiles", payload);
+  } catch (error) {
+    created = await supabaseInsert("profiles", fallbackPayload);
+  }
   return created?.[0]?.id || "";
+}
+
+async function fetchProfiles() {
+  try {
+    return await supabaseSelect("profiles", "select=id,full_name,role,status,password&order=created_at.asc", { optional: true });
+  } catch (error) {
+    return supabaseSelect("profiles", "select=id,full_name,role,status&order=created_at.asc", { optional: true });
+  }
 }
 
 async function dbEnsureCategory(name) {
@@ -691,7 +729,7 @@ async function hydrateFromSupabase() {
       clients,
       memberships,
     ] = await Promise.all([
-      supabaseSelect("profiles", "select=id,full_name,role,status,password&order=created_at.asc", { optional: true }),
+      fetchProfiles(),
       supabaseSelect("categories", "select=id,name,is_active&order=name.asc", { optional: true }),
       supabaseSelect("products", "select=id,name,sku,category_id,sale_price,purchase_cost,purchase_cost_total,status,supplier_name,image_url,updated_at&order=name.asc", { optional: true }),
       supabaseSelect("inventory", "select=product_id,current_quantity,min_quantity,ideal_quantity,inventory_date,week_start,week_end,updated_at", { optional: true }),
