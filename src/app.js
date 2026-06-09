@@ -1,3 +1,7 @@
+if (!window.BODY_FIT_ENV) {
+  await import(`/api/bodyfit-env.js?v=${Date.now()}`);
+}
+
 const env = window.BODY_FIT_ENV || {};
 const DEFAULT_SUPABASE_URL = env.SUPABASE_URL || "";
 const DEFAULT_SUPABASE_ANON_KEY = env.SUPABASE_ANON_KEY || "";
