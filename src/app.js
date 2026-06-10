@@ -485,19 +485,29 @@ async function fetchProfiles() {
   }
 }
 
+async function fetchCurrentCashRegister() {
+  const openRegisters = await supabaseSelect("cash_registers", "select=*&status=eq.open&order=opened_at.desc&limit=1", { optional: true });
+  if (openRegisters?.[0]) return openRegisters;
+  return supabaseSelect("cash_registers", "select=*&order=opened_at.desc&limit=1", { optional: true });
+}
+
 async function dbEnsureCategory(name) {
   const categoryName = (name || "Inventario").trim();
   const existing = await supabaseSelect("categories", `select=id,name&name=eq.${encodeURIComponent(categoryName)}&limit=1`, { optional: true });
   if (existing?.[0]?.id) return existing[0].id;
-  const created = await supabaseUpsert("categories", { name: categoryName, is_active: true }, "name");
-  return created?.[0]?.id || "";
+  const created = await supabaseInsert("categories", { name: categoryName, is_active: true });
+  return created?.[0]?.id || existing?.[0]?.id || "";
 }
 
 async function dbUpsertProduct(product) {
   const categoryId = await dbEnsureCategory(product.category);
   const userId = await dbEnsureProfile();
+  const existingBySku = product.sku
+    ? await supabaseSelect("products", `select=id&sku=eq.${encodeURIComponent(product.sku)}&limit=1`, { optional: true })
+    : [];
+  const productId = existingBySku?.[0]?.id || product.id;
   const productPayload = {
-    id: product.id,
+    id: productId,
     name: product.name,
     sku: product.sku || null,
     category_id: categoryId,
@@ -511,9 +521,9 @@ async function dbUpsertProduct(product) {
     updated_at: new Date().toISOString(),
   };
   const savedProduct = await supabaseUpsert("products", productPayload, "id");
-  const productId = savedProduct?.[0]?.id || product.id;
+  const savedProductId = savedProduct?.[0]?.id || productId;
   await supabaseUpsert("inventory", {
-    product_id: productId,
+    product_id: savedProductId,
     current_quantity: product.quantity,
     min_quantity: product.minQuantity,
     ideal_quantity: product.idealQuantity,
@@ -522,7 +532,7 @@ async function dbUpsertProduct(product) {
     week_end: product.weekEnd,
     updated_at: new Date().toISOString(),
   }, "product_id");
-  return productId;
+  return savedProductId;
 }
 
 async function dbDisableProduct(product) {
@@ -778,7 +788,7 @@ async function hydrateFromSupabase() {
       supabaseSelect("categories", "select=id,name,is_active&order=name.asc", { optional: true }),
       supabaseSelect("products", "select=id,name,sku,category_id,sale_price,purchase_cost,purchase_cost_total,status,supplier_name,image_url,updated_at&order=name.asc", { optional: true }),
       supabaseSelect("inventory", "select=product_id,current_quantity,min_quantity,ideal_quantity,inventory_date,week_start,week_end,updated_at", { optional: true }),
-      supabaseSelect("cash_registers", "select=*&order=opened_at.desc&limit=1", { optional: true }),
+      fetchCurrentCashRegister(),
       supabaseSelect("sales", "select=*&order=created_at.desc&limit=1000", { optional: true }),
       supabaseSelect("sale_items", "select=*&order=created_at.desc&limit=2000", { optional: true }),
       supabaseSelect("cash_movements", "select=*&order=created_at.desc&limit=1000", { optional: true }),
@@ -5188,6 +5198,14 @@ async function openCash(event) {
     await hydrateFromSupabase();
     dismissToastAfterDelay();
   } catch (error) {
+    if (String(error.message || "").includes("one_open_cash_register") || String(error.message || "").includes("duplicate key value")) {
+      await hydrateFromSupabase();
+      if (state.cashRegister?.status === "abierta") {
+        state.toast = "Caja abierta sincronizada desde Supabase.";
+        dismissToastAfterDelay();
+        return;
+      }
+    }
     alert(`No se pudo abrir la caja en Supabase: ${error.message}`);
   }
 }
