@@ -65,21 +65,28 @@ const initialState = {
   movements: [],
 };
 
-let state = normalizeState(initialState);
+const SESSION_STORAGE_KEY = "bodyfit.session.v1";
+let state = normalizeState({
+  ...initialState,
+  ...loadSavedSession(),
+});
 
 function normalizeState(nextState) {
   const users = Array.isArray(nextState.users) ? nextState.users : [];
   const currentUserId = nextState.currentUserId || "";
-  const currentUser = users.find((user) => user.id === currentUserId);
+  const storedUser = nextState.user?.name && nextState.user.name !== "Sin sesión" ? nextState.user : null;
+  const currentUser = users.find((user) => user.id === currentUserId)
+    || (storedUser && storedUser.id === currentUserId ? storedUser : null);
+  const products = Array.isArray(nextState.products) ? nextState.products : [];
   const normalizedState = {
     ...nextState,
     users,
     currentUserId,
-    user: currentUser ? { name: currentUser.name, role: currentUser.role } : { name: "Sin sesión", role: "" },
+    user: currentUser ? { id: currentUser.id, name: currentUser.name, role: currentUser.role, password: currentUser.password || "" } : { name: "Sin sesión", role: "" },
     sessionActive: Boolean(nextState.sessionActive && currentUser),
     toast: "",
-    members: nextState.members || [],
-    products: nextState.products.map(withInventoryWeek),
+    members: Array.isArray(nextState.members) ? nextState.members : [],
+    products: products.map(withInventoryWeek),
     movements: (nextState.movements || []).filter((movement) => !isSaleInventoryMovement(movement)),
     newProductModalOpen: false,
     editingProductId: "",
@@ -102,6 +109,15 @@ function normalizeState(nextState) {
   normalizedState.cashMovements = syncCashMovementsFromSales(normalizedState);
 
   return normalizedState;
+}
+
+function loadSavedSession() {
+  try {
+    const savedState = JSON.parse(localStorage.getItem(SESSION_STORAGE_KEY) || "{}");
+    return savedState && typeof savedState === "object" ? savedState : {};
+  } catch (error) {
+    return {};
+  }
 }
 
 function normalizeProductKey(value = "") {
@@ -299,7 +315,34 @@ function routePermission(tabId) {
 }
 
 function saveState() {
-  // El estado operativo vive en Supabase. Esta función solo conserva el flujo actual en memoria.
+  const sessionState = {
+    activeTab: state.activeTab,
+    settingsView: state.settingsView,
+    reportsView: state.reportsView,
+    reportStatsPeriod: state.reportStatsPeriod,
+    reportStatsDate: state.reportStatsDate,
+    reportStatsStartDate: state.reportStatsStartDate,
+    reportStatsEndDate: state.reportStatsEndDate,
+    currentUserId: state.currentUserId,
+    sessionActive: state.sessionActive,
+    user: state.user,
+    users: state.users,
+    cashRegister: state.cashRegister,
+    products: state.products,
+    sales: state.sales,
+    members: state.members,
+    movements: state.movements,
+    cashMovements: state.cashMovements,
+    salePaymentMethod: state.salePaymentMethod,
+    saleNewPanelOpen: state.saleNewPanelOpen,
+    historyMonth: state.historyMonth,
+    historyWeekStart: state.historyWeekStart,
+  };
+  try {
+    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionState));
+  } catch (error) {
+    console.warn("No se pudo guardar la cache de sesion.", error);
+  }
 }
 
 function supabaseHeaders({ prefer = "" } = {}) {
@@ -768,10 +811,11 @@ async function hydrateFromSupabase() {
 
 function applyRemoteProfiles(profiles) {
   if (!profiles.length) {
-    state.users = [];
-    state.currentUserId = "";
-    state.user = { name: "Sin sesión", role: "" };
-    state.sessionActive = false;
+    if (!state.sessionActive && !state.users.length) {
+      state.users = [];
+      state.currentUserId = "";
+      state.user = { name: "Sin sesión", role: "" };
+    }
     return;
   }
   const dedupedProfiles = [...profiles]
@@ -788,11 +832,14 @@ function applyRemoteProfiles(profiles) {
     password: profile.password || "",
   }));
   if (!state.users.some((user) => user.id === state.currentUserId)) {
+    const currentByName = state.user?.name
+      ? state.users.find((user) => normalizeMemberName(user.name) === normalizeMemberName(state.user.name))
+      : null;
     const superAdmin = state.users.find((user) => user.role === "super-admin") || state.users[0];
-    state.currentUserId = superAdmin?.id || "";
+    state.currentUserId = (state.sessionActive ? currentByName?.id : "") || superAdmin?.id || "";
   }
   const user = activeUser();
-  state.user = { name: user.name, role: user.role };
+  state.user = { id: user.id, name: user.name, role: user.role, password: user.password || "" };
 }
 
 function applyRemoteProducts(categories, products, inventory) {

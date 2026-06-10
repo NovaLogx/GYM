@@ -182,9 +182,9 @@ on conflict (name) do nothing;
 
 with product_seed(name, sku, category, quantity, min_quantity, ideal_quantity, purchase_cost_total, purchase_cost, sale_price, image_url) as (
   values
-    ('Agua litro', 'AGUA-LITRO', 'Aguas', 12, 4, 12, 20000, 1667, 3500, './assets/product-images/agua-litro.png'),
+    ('Agua litro', 'AGUA-LITRO', 'Aguas', 12, 4, 12, 20000, 1666, 3500, './assets/product-images/agua-litro-current.jpg'),
     ('Agua personal', 'AGUA-PERSONAL', 'Aguas', 24, 8, 24, 26000, 1083, 2500, './assets/product-images/agua-personal.png'),
-    ('Vive 100', 'VIVE-100', 'Hidratantes', 6, 2, 6, 13000, 2167, 3000, './assets/product-images/vive100-current.jpg'),
+    ('Vive 100', 'VIVE-100', 'Hidratantes', 6, 2, 6, 13000, 2166, 3000, './assets/product-images/vive100-current.jpg'),
     ('Amper', 'AMPER', 'Energizantes', 6, 2, 6, 17000, 2833, 4000, './assets/product-images/amper-current.jpg'),
     ('Squash', 'SQUASH', 'Hidratantes', 12, 4, 12, 31000, 2583, 3500, './assets/product-images/squash-current.jpg')
 ),
