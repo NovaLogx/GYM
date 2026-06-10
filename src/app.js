@@ -66,9 +66,11 @@ const initialState = {
 };
 
 const SESSION_STORAGE_KEY = "bodyfit.session.v1";
+const savedSession = loadSavedSession();
 let state = normalizeState({
   ...initialState,
-  ...loadSavedSession(),
+  ...savedSession,
+  booting: !savedSession.sessionActive,
 });
 
 function normalizeState(nextState) {
@@ -843,6 +845,7 @@ function applyRemoteProfiles(profiles) {
 }
 
 function applyRemoteProducts(categories, products, inventory) {
+  if (!products.length && state.products?.length) return;
   const categoriesById = new Map(categories.map((category) => [category.id, category.name]));
   const inventoryByProduct = new Map(inventory.map((item) => [item.product_id, item]));
   state.dbCategories = categories;
@@ -871,6 +874,7 @@ function applyRemoteProducts(categories, products, inventory) {
 
 function applyRemoteCashRegister(cash) {
   if (!cash) {
+    if (state.cashRegister) return;
     state.cashRegister = null;
     return;
   }
@@ -891,6 +895,7 @@ function applyRemoteCashRegister(cash) {
 }
 
 function applyRemoteSales(sales, saleItems) {
+  if (!sales.length && !saleItems.length && state.sales?.length) return;
   const salesById = new Map(sales.map((sale) => [sale.id, sale]));
   state.sales = saleItems
     .map((item) => {
@@ -913,6 +918,7 @@ function applyRemoteSales(sales, saleItems) {
 }
 
 function applyRemoteCashMovements(cashMovements) {
+  if (!cashMovements.length && state.cashMovements?.length) return;
   state.cashMovements = cashMovements.map((movement) => ({
     id: movement.id,
     type: movement.type || (movement.movement_type === "expense" ? "expense" : "income"),
