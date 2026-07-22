@@ -12,9 +12,9 @@ const DEFAULT_SUPABASE_ANON_KEY = env.SUPABASE_ANON_KEY || "";
 const MEMBERSHIP_PRICE = 50000;
 const RUNTIME_MODE_KEY = "bodyfit.runtime-mode.v1";
 const ROLE_PERMISSIONS = {
-  "super-admin": ["dashboard", "sales", "inventory-view", "inventory-edit", "memberships", "cash-view", "cash-open", "cash-edit", "reports-view", "reports-edit", "history", "settings", "users-manage", "connection"],
-  admin: ["dashboard", "sales", "inventory-view", "inventory-edit", "memberships", "cash-view", "cash-open", "reports-view", "history"],
-  operator: ["dashboard", "sales", "inventory-view", "memberships", "cash-view", "cash-open"],
+  "super-admin": ["dashboard", "sales", "inventory-view", "inventory-edit", "supplements-view", "supplements-manage", "memberships", "cash-view", "cash-open", "cash-edit", "reports-view", "reports-edit", "history", "settings", "users-manage", "connection"],
+  admin: ["dashboard", "sales", "inventory-view", "inventory-edit", "supplements-view", "supplements-manage", "memberships", "cash-view", "cash-open", "reports-view", "history"],
+  operator: ["dashboard", "sales", "inventory-view", "supplements-view", "memberships", "cash-view", "cash-open"],
 };
 const DEFAULT_SYSTEM_USERS = [
   { name: "Super Administrador", role: "super-admin", password: "Superadmin" },
@@ -28,6 +28,299 @@ const DEFAULT_INVENTORY_SEED = [
   { name: "Amper", sku: "AMPER", category: "Energizantes", quantity: 6, minQuantity: 2, idealQuantity: 6, purchaseCostTotal: 17000, purchaseCost: 2833, salePrice: 4000, imageUrl: "./assets/product-images/amper-current.jpg" },
   { name: "Squash", sku: "SQUASH", category: "Hidratantes", quantity: 12, minQuantity: 4, idealQuantity: 12, purchaseCostTotal: 31000, purchaseCost: 2583, salePrice: 3500, imageUrl: "./assets/product-images/squash-current.jpg" },
 ];
+const SUPPLEMENT_CATEGORIES = [
+  "Proteinas",
+  "Creatinas",
+  "Aminoacidos",
+  "Quemadores",
+];
+const SUPPLEMENT_CATEGORY_LABELS = {
+  Proteinas: "Proteínas",
+  Creatinas: "Creatinas",
+  Aminoacidos: "Aminoácidos",
+  Quemadores: "Quemadores",
+};
+const SUPPLEMENT_CATEGORY_ORDER = ["Proteinas", "Creatinas", "Quemadores", "Aminoacidos"];
+const SUPPLEMENT_ORDER_DATA_VERSION = "2026-07-22-complete-order-only-v1";
+const SUPPLEMENT_PRESENTATION_VERSION = "2026-07-22-product-images-v1";
+const SUPPLEMENT_PRESENTATION_UPDATES = {
+  "supp-order-proton-3lb": { name: "Proton Gainer", imageUrl: "./assets/product-images/supplements/proton-gainer.jpg" },
+  "supp-order-whey-gourmet": { name: "Whey Gourmet", imageUrl: "./assets/product-images/supplements/whey-gourmet.jpg" },
+  "supp-order-bi-pro-2lb": { name: "Bi Pro", imageUrl: "./assets/product-images/supplements/bi-pro-classic.jpg" },
+  "supp-order-tnt-3lb": { name: "TNT Mega Mass", imageUrl: "./assets/product-images/supplements/tnt-mega-mass.jpg" },
+  "supp-order-creatina-platinum-90-serv": { name: "Crea Platinum", imageUrl: "./assets/product-images/supplements/creatina-platinum.jpg" },
+  "supp-order-creatina-dragon-pharma": { name: "Crea Dragon", imageUrl: "./assets/product-images/supplements/creatina-dragon.jpg" },
+  "supp-order-creatina-monohidrato-insane-lab": { name: "Crea Insane", imageUrl: "./assets/product-images/supplements/creatina-insane.jpg" },
+  "supp-order-creatina-crea-stack-red-berries": { name: "Crea Stack", imageUrl: "./assets/product-images/supplements/crea-stack.jpg" },
+  "supp-order-burner-stack-nutriamerican": { name: "Burner Stack" },
+  "supp-order-rc-amino-tone-eaa": { name: "Amino Tone EAA" },
+};
+const DEFAULT_SUPPLEMENT_MARGIN_SETTINGS = {
+  minimumMargin: 30,
+  targetMargin: 35,
+  premiumMargin: 40,
+  minimumProfitability: 45,
+  targetProfitability: 55,
+};
+const DEFAULT_SUPPLEMENT_PRODUCTS = [
+  {
+    id: "supp-order-proton-3lb",
+    orderIndex: 1,
+    name: "Proton Gainer",
+    brand: "Proton",
+    category: "Proteinas",
+    sku: "SUP-PROTON-3LB",
+    barcode: "",
+    description: "Pedido realizado. Cantidad inicial: 3 unidades.",
+    imageUrl: "./assets/product-images/supplements/proton-gainer.jpg",
+    purchaseCost: 68000,
+    transportUnitCost: 0,
+    taxUnitCost: 0,
+    commissionUnitCost: 0,
+    otherUnitCost: 0,
+    additionalUnitCost: 0,
+    salePrice: 100000,
+    targetMarginPercent: 32,
+    currentStock: 3,
+    minimumStock: 0,
+    supplierName: "Pedido realizado",
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: "supp-order-whey-gourmet",
+    orderIndex: 2,
+    name: "Whey Gourmet",
+    brand: "Whey Gourmet",
+    category: "Proteinas",
+    sku: "SUP-WHEY-GOURMET",
+    barcode: "",
+    description: "Pedido realizado. Cantidad inicial: 1 unidad.",
+    imageUrl: "./assets/product-images/supplements/whey-gourmet.jpg",
+    purchaseCost: 135000,
+    transportUnitCost: 0,
+    taxUnitCost: 0,
+    commissionUnitCost: 0,
+    otherUnitCost: 0,
+    additionalUnitCost: 0,
+    salePrice: 200000,
+    targetMarginPercent: 32.5,
+    currentStock: 1,
+    minimumStock: 0,
+    supplierName: "Pedido realizado",
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: "supp-order-bi-pro-2lb",
+    orderIndex: 3,
+    name: "Bi Pro",
+    brand: "Bi Pro",
+    category: "Proteinas",
+    sku: "SUP-BI-PRO-2LB",
+    barcode: "",
+    description: "Pedido realizado. Cantidad inicial: 1 unidad.",
+    imageUrl: "./assets/product-images/supplements/bi-pro-classic.jpg",
+    purchaseCost: 158000,
+    transportUnitCost: 0,
+    taxUnitCost: 0,
+    commissionUnitCost: 0,
+    otherUnitCost: 0,
+    additionalUnitCost: 0,
+    salePrice: 250000,
+    targetMarginPercent: 36.8,
+    currentStock: 1,
+    minimumStock: 0,
+    supplierName: "Pedido realizado",
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: "supp-order-tnt-3lb",
+    orderIndex: 4,
+    name: "TNT Mega Mass",
+    brand: "TNT",
+    category: "Proteinas",
+    sku: "SUP-TNT-3LB",
+    barcode: "",
+    description: "Pedido realizado. Cantidad inicial: 2 unidades.",
+    imageUrl: "./assets/product-images/supplements/tnt-mega-mass.jpg",
+    purchaseCost: 63000,
+    transportUnitCost: 0,
+    taxUnitCost: 0,
+    commissionUnitCost: 0,
+    otherUnitCost: 0,
+    additionalUnitCost: 0,
+    salePrice: 100000,
+    targetMarginPercent: 37,
+    currentStock: 2,
+    minimumStock: 0,
+    supplierName: "Pedido realizado",
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: "supp-order-creatina-platinum-90-serv",
+    orderIndex: 5,
+    name: "Crea Platinum",
+    brand: "Platinum",
+    category: "Creatinas",
+    sku: "SUP-CREATINA-PLATINUM-90-SERV",
+    barcode: "",
+    description: "Pedido realizado. Cantidad inicial: 2 unidades.",
+    imageUrl: "./assets/product-images/supplements/creatina-platinum.jpg",
+    purchaseCost: 116000,
+    transportUnitCost: 0,
+    taxUnitCost: 0,
+    commissionUnitCost: 0,
+    otherUnitCost: 0,
+    additionalUnitCost: 0,
+    salePrice: 180000,
+    targetMarginPercent: 35.6,
+    currentStock: 2,
+    minimumStock: 0,
+    supplierName: "Pedido realizado",
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: "supp-order-creatina-dragon-pharma",
+    orderIndex: 6,
+    name: "Crea Dragon",
+    brand: "Dragon Pharma",
+    category: "Creatinas",
+    sku: "SUP-CREATINA-DRAGON-PHARMA",
+    barcode: "",
+    description: "Pedido realizado. Cantidad inicial: 2 unidades.",
+    imageUrl: "./assets/product-images/supplements/creatina-dragon.jpg",
+    purchaseCost: 86000,
+    transportUnitCost: 0,
+    taxUnitCost: 0,
+    commissionUnitCost: 0,
+    otherUnitCost: 0,
+    additionalUnitCost: 0,
+    salePrice: 140000,
+    targetMarginPercent: 38.6,
+    currentStock: 2,
+    minimumStock: 0,
+    supplierName: "Pedido realizado",
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: "supp-order-creatina-monohidrato-insane-lab",
+    orderIndex: 7,
+    name: "Crea Insane",
+    brand: "Insane Lab",
+    category: "Creatinas",
+    sku: "SUP-CREATINA-MONOHIDRATO-INSANE-LAB",
+    barcode: "",
+    description: "Pedido realizado. Cantidad inicial: 5 unidades.",
+    imageUrl: "./assets/product-images/supplements/creatina-insane.jpg",
+    purchaseCost: 52000,
+    transportUnitCost: 0,
+    taxUnitCost: 0,
+    commissionUnitCost: 0,
+    otherUnitCost: 0,
+    additionalUnitCost: 0,
+    salePrice: 90000,
+    targetMarginPercent: 42.2,
+    currentStock: 5,
+    minimumStock: 0,
+    supplierName: "Pedido realizado",
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: "supp-order-creatina-crea-stack-red-berries",
+    orderIndex: 8,
+    name: "Crea Stack",
+    brand: "Stack",
+    category: "Creatinas",
+    sku: "SUP-CREATINA-CREA-STACK-RED-BERRIES",
+    barcode: "",
+    description: "Pedido realizado. Cantidad inicial: 2 unidades.",
+    imageUrl: "./assets/product-images/supplements/crea-stack.jpg",
+    purchaseCost: 106500,
+    transportUnitCost: 0,
+    taxUnitCost: 0,
+    commissionUnitCost: 0,
+    otherUnitCost: 0,
+    additionalUnitCost: 0,
+    salePrice: 150000,
+    targetMarginPercent: 29,
+    currentStock: 2,
+    minimumStock: 0,
+    supplierName: "Pedido realizado",
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: "supp-order-burner-stack-nutriamerican",
+    orderIndex: 9,
+    name: "Burner Stack",
+    brand: "Nutriamerican",
+    category: "Quemadores",
+    sku: "SUP-BURNER-STACK-NUTRIAMERICAN",
+    barcode: "",
+    description: "Pedido realizado. Cantidad inicial: 2 unidades.",
+    imageUrl: "",
+    purchaseCost: 99000,
+    transportUnitCost: 0,
+    taxUnitCost: 0,
+    commissionUnitCost: 0,
+    otherUnitCost: 0,
+    additionalUnitCost: 0,
+    salePrice: 150000,
+    targetMarginPercent: 34,
+    currentStock: 2,
+    minimumStock: 0,
+    supplierName: "Pedido realizado",
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: "supp-order-rc-amino-tone-eaa",
+    orderIndex: 10,
+    name: "Amino Tone EAA",
+    brand: "RC",
+    category: "Aminoacidos",
+    sku: "SUP-RC-AMINO-TONE-EAA",
+    barcode: "",
+    description: "Pedido realizado. Cantidad inicial: 1 unidad.",
+    imageUrl: "",
+    purchaseCost: 95000,
+    transportUnitCost: 0,
+    taxUnitCost: 0,
+    commissionUnitCost: 0,
+    otherUnitCost: 0,
+    additionalUnitCost: 0,
+    salePrice: 150000,
+    targetMarginPercent: 36.7,
+    currentStock: 1,
+    minimumStock: 0,
+    supplierName: "Pedido realizado",
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+];
+const DEFAULT_SUPPLEMENT_ORDER_INDICATORS = {
+  investment: 1793000,
+  saleValue: 2790000,
+  expectedProfit: 997000,
+  averageMargin: 35.7,
+  averageProfitability: 55.6,
+};
 
 function persistRuntimeMode(mode) {
   try {
@@ -61,6 +354,36 @@ const initialState = {
   sessionActive: false,
   settingsView: "home",
   reportsView: "",
+  supplementsView: "summary",
+  supplementSearch: "",
+  supplementCategoryFilter: "all",
+  supplementBrandFilter: "all",
+  supplementStatusFilter: "all",
+  supplementSortKey: "name",
+  supplementProjectFilter: "all",
+  supplementPlanFilter: "all",
+  supplementCycleFilter: "all",
+  supplementMarginSettings: DEFAULT_SUPPLEMENT_MARGIN_SETTINGS,
+  supplementProductModalOpen: false,
+  supplementEditingProductId: "",
+  supplementStockProductId: "",
+  supplementSaleModalOpen: false,
+  supplementSaleProductId: "",
+  supplementSaleQuantity: 1,
+  supplementSaleUnitPrice: 0,
+  supplementSalePaymentMethod: "cash",
+  supplementSaleSearch: "",
+  supplementSaleDateFilter: "",
+  supplementSelectedSaleId: "",
+  supplementCancellingSaleId: "",
+  supplementProducts: [],
+  supplementMovements: [],
+  supplementSales: [],
+  supplementOrderPlans: [],
+  supplementProjects: [],
+  supplementProjections: [],
+  supplementDatasetVersion: "",
+  supplementPresentationVersion: "",
   reportStatsPeriod: "day",
   reportStatsDate: toDateKey(new Date()),
   reportStatsStartDate: toDateKey(new Date()),
@@ -102,6 +425,17 @@ const LEGACY_SESSION_KEYS = new Set([
   "activeTab",
   "settingsView",
   "reportsView",
+  "supplementsView",
+  "supplementSearch",
+  "supplementCategoryFilter",
+  "supplementBrandFilter",
+  "supplementStatusFilter",
+  "supplementSortKey",
+  "supplementProjectFilter",
+  "supplementPlanFilter",
+  "supplementCycleFilter",
+  "supplementSaleSearch",
+  "supplementSaleDateFilter",
   "reportStatsPeriod",
   "reportStatsDate",
   "reportStatsStartDate",
@@ -125,6 +459,15 @@ const LOCAL_STATE_KEYS = new Set([
   "cashRegister",
   "cashMovements",
   "movements",
+  "supplementProducts",
+  "supplementMovements",
+  "supplementSales",
+  "supplementOrderPlans",
+  "supplementProjects",
+  "supplementProjections",
+  "supplementMarginSettings",
+  "supplementDatasetVersion",
+  "supplementPresentationVersion",
 ]);
 const savedSession = loadSavedSession();
 let state = normalizeState({
@@ -132,7 +475,24 @@ let state = normalizeState({
   ...savedSession,
   booting: true,
 });
+applyInitialRouteToState();
 let inventoryBootstrapAttempted = false;
+
+function applyInitialRouteToState() {
+  const path = window.location.pathname.replace(/\/+$/, "") || "/";
+  if (path === "/suplementos") state.activeTab = "supplements";
+}
+
+function syncRouteForTab(tabId) {
+  const path = window.location.pathname.replace(/\/+$/, "") || "/";
+  if (tabId === "supplements" && path !== "/suplementos") {
+    window.history.pushState({}, "", "/suplementos");
+    return;
+  }
+  if (tabId !== "supplements" && path === "/suplementos") {
+    window.history.pushState({}, "", "/");
+  }
+}
 
 function normalizeState(nextState) {
   const users = Array.isArray(nextState.users) ? nextState.users : [];
@@ -156,6 +516,39 @@ function normalizeState(nextState) {
     memberModalMode: "",
     selectedMemberId: "",
     reportsView: ["stats", "daily", "history"].includes(nextState.reportsView) ? nextState.reportsView : "",
+    supplementsView: nextState.supplementsView === "inventory" ? "products" : ["summary", "products", "sales", "planning", "projects", "projections"].includes(nextState.supplementsView) ? nextState.supplementsView : "summary",
+    supplementSearch: nextState.supplementSearch || "",
+    supplementCategoryFilter: nextState.supplementCategoryFilter || "all",
+    supplementBrandFilter: nextState.supplementBrandFilter || "all",
+    supplementStatusFilter: nextState.supplementStatusFilter || "all",
+    supplementSortKey: nextState.supplementSortKey || "name",
+    supplementProjectFilter: nextState.supplementProjectFilter || "all",
+    supplementPlanFilter: nextState.supplementPlanFilter || "all",
+    supplementCycleFilter: nextState.supplementCycleFilter || "all",
+    supplementSaleSearch: nextState.supplementSaleSearch || "",
+    supplementSaleDateFilter: nextState.supplementSaleDateFilter || "",
+    supplementMarginSettings: {
+      ...DEFAULT_SUPPLEMENT_MARGIN_SETTINGS,
+      ...(nextState.supplementMarginSettings || {}),
+    },
+    supplementProductModalOpen: false,
+    supplementEditingProductId: "",
+    supplementStockProductId: "",
+    supplementSaleModalOpen: false,
+    supplementSaleProductId: nextState.supplementSaleProductId || "",
+    supplementSaleQuantity: Math.max(1, Number(nextState.supplementSaleQuantity || 1)),
+    supplementSaleUnitPrice: Number(nextState.supplementSaleUnitPrice || 0),
+    supplementSalePaymentMethod: nextState.supplementSalePaymentMethod || "cash",
+    supplementSelectedSaleId: "",
+    supplementCancellingSaleId: "",
+    supplementProducts: normalizeSupplementProducts(nextState.supplementProducts),
+    supplementMovements: Array.isArray(nextState.supplementMovements) ? nextState.supplementMovements : [],
+    supplementSales: Array.isArray(nextState.supplementSales) ? nextState.supplementSales.map(normalizeSupplementSale) : [],
+    supplementOrderPlans: Array.isArray(nextState.supplementOrderPlans) ? nextState.supplementOrderPlans : [],
+    supplementProjects: Array.isArray(nextState.supplementProjects) ? nextState.supplementProjects : [],
+    supplementProjections: Array.isArray(nextState.supplementProjections) ? nextState.supplementProjections : [],
+    supplementDatasetVersion: nextState.supplementDatasetVersion || "",
+    supplementPresentationVersion: nextState.supplementPresentationVersion || "",
     cashMovements: Array.isArray(nextState.cashMovements) ? nextState.cashMovements : [],
     reportStatsPeriod: ["day", "week", "month", "custom"].includes(nextState.reportStatsPeriod) ? nextState.reportStatsPeriod : "day",
     reportStatsDate: nextState.reportStatsDate || toDateKey(new Date()),
@@ -225,6 +618,67 @@ function ensureLocalInventorySeed() {
   }));
 }
 
+function ensureLocalSupplementSeed() {
+  if (state.supplementDatasetVersion === SUPPLEMENT_ORDER_DATA_VERSION && state.supplementProducts.length) return;
+  state.supplementProducts = DEFAULT_SUPPLEMENT_PRODUCTS.map((product) => normalizeSupplementProduct(product));
+  const now = new Date().toISOString();
+  const totals = getSupplementTotals(state.supplementProducts);
+  state.supplementMovements = [];
+  state.supplementSales = [];
+  state.supplementProjections = [];
+  state.supplementSearch = "";
+  state.supplementCategoryFilter = "all";
+  state.supplementBrandFilter = "all";
+  state.supplementStatusFilter = "all";
+  state.supplementSortKey = "name";
+  state.supplementProjectFilter = "all";
+  state.supplementPlanFilter = "all";
+  state.supplementCycleFilter = "all";
+  state.supplementOrderPlans = [
+    {
+      id: "local-supp-plan-real-orders",
+      name: "Pedido inicial suplementos",
+      status: "planning",
+      supplierName: "Pedido realizado",
+      budget: totals.totalInvestment,
+      expectedSale: totals.potentialSale,
+      expectedProfit: totals.expectedProfit,
+      plannedDate: toDateKey(new Date()),
+      createdAt: now,
+      updatedAt: now,
+    },
+  ];
+  state.supplementProjects = [
+    {
+      id: "local-supp-project-real-orders",
+      name: "Pedidos realizados BODY FIT",
+      status: "active",
+      objective: "Gestionar los productos comprados segun el analisis de suplementos.",
+      startDate: toDateKey(new Date()),
+      endDate: "",
+      createdAt: now,
+      updatedAt: now,
+    },
+  ];
+  state.supplementDatasetVersion = SUPPLEMENT_ORDER_DATA_VERSION;
+  state.supplementPresentationVersion = SUPPLEMENT_PRESENTATION_VERSION;
+}
+
+function applySupplementPresentationUpdates() {
+  if (state.supplementPresentationVersion === SUPPLEMENT_PRESENTATION_VERSION) return;
+  state.supplementProducts = state.supplementProducts.map((product) => {
+    const update = SUPPLEMENT_PRESENTATION_UPDATES[product.id];
+    if (!update) return product;
+    return normalizeSupplementProduct({
+      ...product,
+      name: update.name || product.name,
+      imageUrl: update.imageUrl || product.imageUrl || "",
+      updatedAt: new Date().toISOString(),
+    });
+  });
+  state.supplementPresentationVersion = SUPPLEMENT_PRESENTATION_VERSION;
+}
+
 function hydrateLocalState(fallbackMessage = "Modo local activo. Los datos se guardan en este navegador.") {
   supabaseRuntimeFallback = true;
   persistRuntimeMode("local");
@@ -250,6 +704,8 @@ function hydrateLocalState(fallbackMessage = "Modo local activo. Los datos se gu
   }
 
   ensureLocalInventorySeed();
+  ensureLocalSupplementSeed();
+  applySupplementPresentationUpdates();
   seedLocalSalesHistoryFromUrl();
 
   state.supabase.status = "local";
@@ -514,6 +970,7 @@ function routePermission(tabId) {
     pos: "sales",
     memberships: "memberships",
     inventory: "inventory-view",
+    supplements: "supplements-view",
     "stock-zone": "inventory-view",
     "stock-alerts": "inventory-view",
     "product-search": "inventory-view",
@@ -530,6 +987,17 @@ function saveState() {
     activeTab: state.activeTab,
     settingsView: state.settingsView,
     reportsView: state.reportsView,
+    supplementsView: state.supplementsView,
+    supplementSearch: state.supplementSearch,
+    supplementCategoryFilter: state.supplementCategoryFilter,
+    supplementBrandFilter: state.supplementBrandFilter,
+    supplementStatusFilter: state.supplementStatusFilter,
+    supplementSortKey: state.supplementSortKey,
+    supplementProjectFilter: state.supplementProjectFilter,
+    supplementPlanFilter: state.supplementPlanFilter,
+    supplementCycleFilter: state.supplementCycleFilter,
+    supplementSaleSearch: state.supplementSaleSearch,
+    supplementSaleDateFilter: state.supplementSaleDateFilter,
     reportStatsPeriod: state.reportStatsPeriod,
     reportStatsDate: state.reportStatsDate,
     reportStatsStartDate: state.reportStatsStartDate,
@@ -1096,6 +1564,7 @@ async function hydrateFromSupabase() {
     applyRemoteCashMovements(cashMovements || [], profiles || []);
     applyRemoteInventoryMovements(inventoryMovements || [], profiles || []);
     applyRemoteMemberships(clients || [], memberships || []);
+    await hydrateSupplementsFromSupabase();
 
     if (!inventoryBootstrapAttempted && (!products || products.length === 0)) {
       inventoryBootstrapAttempted = true;
@@ -1137,6 +1606,148 @@ async function fetchProductsFromSupabase() {
     if (!canRetry) throw error;
     return await supabaseSelect("products", minimalSelect, { optional: true });
   }
+}
+
+async function optionalSupabaseSelect(table, query = "select=*") {
+  try {
+    return await supabaseSelect(table, query, { optional: true });
+  } catch (error) {
+    const message = String(error?.message || error || "").toLowerCase();
+    if (message.includes("does not exist") || message.includes("could not find") || message.includes("schema cache")) return [];
+    throw error;
+  }
+}
+
+async function hydrateSupplementsFromSupabase() {
+  if (!supabaseConfigured()) {
+    ensureLocalSupplementSeed();
+    applySupplementPresentationUpdates();
+    return;
+  }
+
+  const [products, movements, sales, plans, projects, projections] = await Promise.all([
+    optionalSupabaseSelect("supplement_products", "select=*&order=name.asc"),
+    optionalSupabaseSelect("supplement_inventory_movements", "select=*&order=created_at.desc&limit=1000"),
+    optionalSupabaseSelect("supplement_sales", "select=*&order=created_at.desc&limit=1000"),
+    optionalSupabaseSelect("supplement_order_plans", "select=*&order=created_at.desc&limit=100"),
+    optionalSupabaseSelect("supplement_projects", "select=*&order=created_at.desc&limit=100"),
+    optionalSupabaseSelect("supplement_projections", "select=*&order=created_at.desc&limit=100"),
+  ]);
+
+  if (products?.length) state.supplementProducts = products.map(dbSupplementProductToLocal);
+  if (movements?.length) state.supplementMovements = movements.map(dbSupplementMovementToLocal);
+  if (sales?.length) state.supplementSales = sales.map(dbSupplementSaleToLocal);
+  if (plans?.length) state.supplementOrderPlans = plans.map(dbSupplementPlanToLocal);
+  if (projects?.length) state.supplementProjects = projects.map(dbSupplementProjectToLocal);
+  if (projections?.length) state.supplementProjections = projections.map(dbSupplementProjectionToLocal);
+  ensureLocalSupplementSeed();
+  applySupplementPresentationUpdates();
+}
+
+function dbSupplementProductToLocal(product) {
+  return normalizeSupplementProduct({
+    ...product,
+    imageUrl: product.image_url,
+    purchaseCost: product.purchase_cost,
+    transportUnitCost: product.transport_unit_cost,
+    taxUnitCost: product.tax_unit_cost,
+    commissionUnitCost: product.commission_unit_cost,
+    otherUnitCost: product.other_unit_cost,
+    additionalUnitCost: product.additional_unit_cost,
+    totalUnitCost: product.total_unit_cost,
+    salePrice: product.sale_price,
+    targetMarginPercent: product.target_margin_percent,
+    currentStock: product.current_stock,
+    minimumStock: product.minimum_stock,
+    supplierName: product.supplier_name,
+    isActive: product.is_active,
+    createdBy: product.created_by,
+    createdAt: product.created_at,
+    updatedAt: product.updated_at,
+  });
+}
+
+function dbSupplementMovementToLocal(movement) {
+  return {
+    id: movement.id,
+    productId: movement.product_id,
+    type: movement.movement_type,
+    quantity: Number(movement.quantity || 0),
+    previousStock: Number(movement.previous_stock || 0),
+    newStock: Number(movement.new_stock || 0),
+    reason: movement.reason || "",
+    observations: movement.observations || "",
+    userName: movement.user_name || "Sistema",
+    profit: Number(movement.profit || 0),
+    createdAt: movement.created_at,
+  };
+}
+
+function dbSupplementSaleToLocal(sale) {
+  return normalizeSupplementSale({
+    id: sale.id,
+    productId: sale.product_id,
+    productName: sale.product_name,
+    quantity: sale.quantity,
+    unitCost: sale.unit_cost,
+    unitPrice: sale.unit_price,
+    subtotal: sale.subtotal,
+    totalCost: sale.total_cost,
+    profit: sale.profit,
+    marginPercentage: sale.margin_percentage,
+    paymentMethod: sale.payment_method,
+    customerName: sale.customer_name,
+    notes: sale.notes,
+    status: sale.status,
+    createdBy: sale.created_by,
+    createdAt: sale.created_at,
+    cancelledAt: sale.cancelled_at,
+    cancellationReason: sale.cancellation_reason,
+  });
+}
+
+function dbSupplementPlanToLocal(plan) {
+  return {
+    id: plan.id,
+    name: plan.name,
+    status: plan.status,
+    supplierName: plan.supplier_name || "",
+    budget: Number(plan.budget || 0),
+    expectedSale: Number(plan.expected_sale || 0),
+    expectedProfit: Number(plan.expected_profit || 0),
+    plannedDate: plan.planned_date || "",
+    createdAt: plan.created_at,
+    updatedAt: plan.updated_at,
+  };
+}
+
+function dbSupplementProjectToLocal(project) {
+  return {
+    id: project.id,
+    name: project.name,
+    status: project.status,
+    objective: project.objective || "",
+    startDate: project.start_date || "",
+    endDate: project.end_date || "",
+    createdAt: project.created_at,
+    updatedAt: project.updated_at,
+  };
+}
+
+function dbSupplementProjectionToLocal(projection) {
+  return {
+    id: projection.id,
+    projectId: projection.project_id,
+    scenario: projection.scenario || "base",
+    projectedUnits: Number(projection.projected_units || 0),
+    projectedRevenue: Number(projection.projected_revenue || 0),
+    projectedProfit: Number(projection.projected_profit || 0),
+    actualUnits: Number(projection.actual_units || 0),
+    actualRevenue: Number(projection.actual_revenue || 0),
+    actualProfit: Number(projection.actual_profit || 0),
+    createdAt: projection.created_at,
+    updatedAt: projection.updated_at,
+  };
 }
 
 async function seedBaseInventoryIfNeeded() {
@@ -1439,6 +2050,321 @@ function isActiveProduct(product) {
   return product.status === "activo";
 }
 
+function normalizeSupplementProduct(product = {}) {
+  const purchaseCost = Number(product.purchaseCost ?? product.purchase_cost ?? 0);
+  const transportUnitCost = Number(product.transportUnitCost ?? product.transport_unit_cost ?? 0);
+  const taxUnitCost = Number(product.taxUnitCost ?? product.tax_unit_cost ?? 0);
+  const commissionUnitCost = Number(product.commissionUnitCost ?? product.commission_unit_cost ?? 0);
+  const otherUnitCost = Number(product.otherUnitCost ?? product.other_unit_cost ?? 0);
+  const calculatedAdditionalCost = transportUnitCost + taxUnitCost + commissionUnitCost + otherUnitCost;
+  const additionalUnitCost = Number(product.additionalUnitCost ?? product.additional_unit_cost ?? calculatedAdditionalCost);
+  const totalUnitCost = Number(product.totalUnitCost ?? product.total_unit_cost ?? (purchaseCost + additionalUnitCost));
+  const currentStock = Math.max(0, Number(product.currentStock ?? product.current_stock ?? product.quantity ?? 0));
+  const salePrice = Number(product.salePrice ?? product.sale_price ?? 0);
+  const minimumStock = Math.max(0, Number(product.minimumStock ?? product.minimum_stock ?? 0));
+  const now = new Date().toISOString();
+  return {
+    id: product.id || crypto.randomUUID(),
+    orderIndex: Number(product.orderIndex ?? product.order_index ?? 999),
+    name: product.name || "Suplemento",
+    brand: product.brand || "",
+    category: product.category || "Proteinas",
+    sku: product.sku || slugSku(product.name || "suplemento").replace("IMP-", "SUP-"),
+    barcode: product.barcode || "",
+    description: product.description || "",
+    imageUrl: product.imageUrl ?? product.image_url ?? "",
+    purchaseCost,
+    transportUnitCost,
+    taxUnitCost,
+    commissionUnitCost,
+    otherUnitCost,
+    additionalUnitCost,
+    totalUnitCost,
+    salePrice,
+    targetMarginPercent: Number(product.targetMarginPercent ?? product.target_margin_percent ?? 30),
+    currentStock,
+    minimumStock,
+    supplierName: product.supplierName ?? product.supplier_name ?? "",
+    isActive: Boolean(product.isActive ?? product.is_active ?? product.status !== "inactive"),
+    createdBy: product.createdBy ?? product.created_by ?? "",
+    createdAt: product.createdAt ?? product.created_at ?? now,
+    updatedAt: product.updatedAt ?? product.updated_at ?? now,
+  };
+}
+
+function normalizeSupplementProducts(products = []) {
+  return (Array.isArray(products) ? products : []).map(normalizeSupplementProduct);
+}
+
+function normalizeSupplementSale(sale = {}) {
+  const quantity = Math.max(1, Number(sale.quantity || 1));
+  const unitCost = Number(sale.unitCost ?? sale.unit_cost ?? 0);
+  const unitPrice = Number(sale.unitPrice ?? sale.unit_price ?? 0);
+  const subtotal = Number(sale.subtotal ?? quantity * unitPrice);
+  const totalCost = Number(sale.totalCost ?? sale.total_cost ?? quantity * unitCost);
+  const profit = Number(sale.profit ?? subtotal - totalCost);
+  return {
+    id: sale.id || crypto.randomUUID(),
+    productId: sale.productId || sale.product_id || "",
+    productName: sale.productName || sale.product_name || "Suplemento",
+    quantity,
+    unitCost,
+    unitPrice,
+    subtotal,
+    totalCost,
+    profit,
+    marginPercentage: Number(sale.marginPercentage ?? sale.margin_percentage ?? percentValue(profit, subtotal)),
+    paymentMethod: sale.paymentMethod || sale.payment_method || "cash",
+    customerName: sale.customerName || sale.customer_name || "",
+    notes: sale.notes || "",
+    status: sale.status === "cancelled" || sale.status === "Anulada" ? "cancelled" : "completed",
+    createdBy: sale.createdBy || sale.created_by || "",
+    userName: sale.userName || sale.user_name || sale.created_by || "Sistema",
+    createdAt: sale.createdAt || sale.created_at || new Date().toISOString(),
+    cancelledAt: sale.cancelledAt || sale.cancelled_at || "",
+    cancellationReason: sale.cancellationReason || sale.cancellation_reason || "",
+  };
+}
+
+function supplementPaymentLabel(method = "") {
+  return {
+    cash: "Efectivo",
+    nequi: "Nequi",
+    daviplata: "Daviplata",
+    bancolombia: "Bancolombia",
+    transfer: "Transferencia",
+    other: "Otro",
+  }[method] || method || "Otro";
+}
+
+function completedSupplementSales() {
+  return (state.supplementSales || []).filter((sale) => sale.status !== "cancelled");
+}
+
+function getSupplementSalesTotals(sales = completedSupplementSales()) {
+  return sales.reduce((totals, sale) => ({
+    revenue: totals.revenue + Number(sale.subtotal || 0),
+    profit: totals.profit + Number(sale.profit || 0),
+    units: totals.units + Number(sale.quantity || 0),
+    count: totals.count + 1,
+  }), { revenue: 0, profit: 0, units: 0, count: 0 });
+}
+
+function supplementSaleProductDisplayName(sale) {
+  return state.supplementProducts.find((product) => product.id === sale.productId)?.name || sale.productName || "Suplemento";
+}
+
+function canManageSupplements() {
+  return hasPermission("supplements-manage");
+}
+
+function canViewSupplementFinancials() {
+  return ["super-admin", "admin"].includes(activeUser().role);
+}
+
+function supplementTotalInvestment(product) {
+  return product.currentStock * product.totalUnitCost;
+}
+
+function supplementProjectedSale(product) {
+  return product.currentStock * product.salePrice;
+}
+
+function supplementExpectedProfit(product) {
+  return supplementProjectedSale(product) - supplementTotalInvestment(product);
+}
+
+function percentValue(value, total) {
+  if (!total) return 0;
+  return (value / total) * 100;
+}
+
+function recommendedSupplementPrice(product) {
+  const targetMargin = Math.min(95, Math.max(0, Number(product.targetMarginPercent || 0)));
+  return targetMargin >= 95 ? product.totalUnitCost : product.totalUnitCost / (1 - targetMargin / 100);
+}
+
+function supplementMargin(product) {
+  return percentValue(product.salePrice - product.totalUnitCost, product.salePrice);
+}
+
+function supplementProfitability(product) {
+  return percentValue(product.salePrice - product.totalUnitCost, product.totalUnitCost);
+}
+
+function supplementStatus(product) {
+  if (!product.isActive) return { label: "Inactivo", value: "inactive", tone: "muted" };
+  if (product.currentStock === 0) return { label: "Agotado", value: "out", tone: "bad" };
+  if (product.currentStock <= product.minimumStock) return { label: "Bajo", value: "low", tone: "warn" };
+  return { label: "Disponible", value: "available", tone: "ok" };
+}
+
+function supplementMarginTone(product) {
+  return supplementMarginState(product).tone;
+}
+
+function supplementMarginState(product) {
+  const settings = state.supplementMarginSettings || DEFAULT_SUPPLEMENT_MARGIN_SETTINGS;
+  const margin = supplementMargin(product);
+  if (!product.salePrice || product.salePrice < product.totalUnitCost) return { label: "Critico", tone: "bad", helper: "Precio inferior al costo real." };
+  if (margin < settings.minimumMargin) return { label: "Critico", tone: "bad", helper: `Margen menor al minimo ${settings.minimumMargin}%.` };
+  if (margin < settings.targetMargin) return { label: "Bajo", tone: "warn", helper: `Margen por debajo del objetivo ${settings.targetMargin}%.` };
+  if (margin >= settings.premiumMargin) return { label: "Premium", tone: "premium", helper: `Margen superior al premium ${settings.premiumMargin}%.` };
+  return { label: "Objetivo", tone: "ok", helper: `Margen igual o superior al objetivo ${settings.targetMargin}%.` };
+}
+
+function getSupplementTotals(products = activeSupplementProducts()) {
+  const activeProducts = products.filter((product) => product.isActive);
+  const investedCapital = activeProducts.reduce((sum, product) => sum + supplementTotalInvestment(product), 0);
+  const potentialSale = activeProducts.reduce((sum, product) => sum + supplementProjectedSale(product), 0);
+  const expectedProfit = potentialSale - investedCapital;
+  const officialOrderTotals = shouldUseOfficialSupplementOrderTotals(activeProducts);
+  const displayInvestment = officialOrderTotals ? DEFAULT_SUPPLEMENT_ORDER_INDICATORS.investment : investedCapital;
+  const displaySale = officialOrderTotals ? DEFAULT_SUPPLEMENT_ORDER_INDICATORS.saleValue : potentialSale;
+  const displayProfit = officialOrderTotals ? DEFAULT_SUPPLEMENT_ORDER_INDICATORS.expectedProfit : expectedProfit;
+  const inventoryUnits = activeProducts.reduce((sum, product) => sum + product.currentStock, 0);
+  const saleTotals = getSupplementSalesTotals();
+  const capitalRecovered = completedSupplementSales().reduce((sum, sale) => sum + Number(sale.totalCost || 0), 0);
+  const accumulatedProfit = saleTotals.profit;
+  const outOfStock = activeProducts.filter((product) => supplementStatus(product).value === "out").length;
+  const activeProject = (state.supplementProjects || []).find((project) => project.status === "active");
+  const rotation = inventoryUnits ? Math.min(100, percentValue(saleTotals.units, inventoryUnits + saleTotals.units)) : 0;
+  return {
+    investedCapital: displayInvestment,
+    potentialSale: displaySale,
+    expectedProfit: displayProfit,
+    capitalRecovered,
+    pendingCapital: Math.max(0, displayInvestment - capitalRecovered),
+    inventoryUnits,
+    activeProjects: (state.supplementProjects || []).filter((project) => project.status === "active").length,
+    activeProjectName: activeProject?.name || "Sin proyecto",
+    activeProducts: activeProducts.length,
+    lowStock: activeProducts.filter((product) => supplementStatus(product).value === "low").length,
+    outOfStock,
+    alerts: getSupplementAlerts(activeProducts).length,
+    rotation,
+    globalMargin: officialOrderTotals ? DEFAULT_SUPPLEMENT_ORDER_INDICATORS.averageMargin : percentValue(expectedProfit, potentialSale),
+    costProfitability: officialOrderTotals ? DEFAULT_SUPPLEMENT_ORDER_INDICATORS.averageProfitability : percentValue(expectedProfit, investedCapital),
+    roi: percentValue(accumulatedProfit, displayInvestment),
+    recoveryPercent: percentValue(capitalRecovered, displayInvestment),
+    accumulatedProfit,
+  };
+}
+
+function shouldUseOfficialSupplementOrderTotals(products = activeSupplementProducts()) {
+  if (state.supplementDatasetVersion !== SUPPLEMENT_ORDER_DATA_VERSION) return false;
+  const expectedProducts = new Map(DEFAULT_SUPPLEMENT_PRODUCTS.map((product) => [product.id, normalizeSupplementProduct(product)]));
+  if (products.length !== expectedProducts.size) return false;
+  return products.every((product) => {
+    const expected = expectedProducts.get(product.id);
+    if (!expected) return false;
+    return Number(product.currentStock || 0) === Number(expected.currentStock || 0)
+      && Number(product.totalUnitCost || 0) === Number(expected.totalUnitCost || 0)
+      && Number(product.salePrice || 0) === Number(expected.salePrice || 0);
+  });
+}
+
+function activeSupplementProducts() {
+  return state.supplementProducts.filter((product) => product.isActive);
+}
+
+function filteredSupplementProducts() {
+  const query = normalizeHeader(state.supplementSearch || "");
+  const products = state.supplementProducts.filter((product) => {
+    const status = supplementStatus(product).value;
+    const haystack = normalizeHeader(`${product.name} ${product.brand} ${product.category} ${product.sku} ${product.barcode} ${product.supplierName}`);
+    const matchesQuery = !query || haystack.includes(query);
+    const matchesCategory = state.supplementCategoryFilter === "all" || product.category === state.supplementCategoryFilter;
+    const matchesBrand = state.supplementBrandFilter === "all" || product.brand === state.supplementBrandFilter;
+    const matchesStatus = state.supplementStatusFilter === "all" || status === state.supplementStatusFilter;
+    return matchesQuery && matchesCategory && matchesBrand && matchesStatus;
+  });
+  return products.sort((a, b) => {
+    const key = state.supplementSortKey;
+    if (["currentStock", "salePrice", "totalUnitCost"].includes(key)) return Number(b[key] || 0) - Number(a[key] || 0);
+    if (key === "name") return supplementProductOrder(a, b);
+    return String(a[key] || "").localeCompare(String(b[key] || ""), "es");
+  });
+}
+
+function supplementCategoryLabel(category) {
+  return SUPPLEMENT_CATEGORY_LABELS[category] || category || "Sin categoría";
+}
+
+function supplementCategorySortValue(category) {
+  const index = SUPPLEMENT_CATEGORY_ORDER.indexOf(category);
+  return index === -1 ? SUPPLEMENT_CATEGORY_ORDER.length : index;
+}
+
+function supplementProductOrder(a, b) {
+  const categoryOrder = supplementCategorySortValue(a.category) - supplementCategorySortValue(b.category);
+  if (categoryOrder) return categoryOrder;
+  return Number(a.orderIndex || 999) - Number(b.orderIndex || 999) || String(a.name || "").localeCompare(String(b.name || ""), "es");
+}
+
+function getSupplementAlerts(products = activeSupplementProducts()) {
+  const alerts = [];
+  products.forEach((product) => {
+    const marginState = supplementMarginState(product);
+    const status = supplementStatus(product);
+    if (!product.totalUnitCost) alerts.push({ severity: "important", title: "Producto sin costo", text: product.name, productId: product.id });
+    if (!product.salePrice) alerts.push({ severity: "important", title: "Producto sin precio", text: product.name, productId: product.id });
+    if (product.salePrice && product.salePrice < product.totalUnitCost) alerts.push({ severity: "critical", title: "Precio inferior al costo", text: product.name, productId: product.id });
+    if (marginState.tone === "bad") alerts.push({ severity: "critical", title: "Margen critico", text: `${product.name} · ${supplementMargin(product).toFixed(1)}%`, productId: product.id });
+    if (status.value === "out") alerts.push({ severity: "critical", title: "Producto agotado", text: product.name, productId: product.id });
+    if (status.value === "low") alerts.push({ severity: "important", title: "Inventario bajo", text: `${product.name} · ${product.currentStock}/${product.minimumStock}`, productId: product.id });
+  });
+  return alerts.sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
+}
+
+function severityRank(severity) {
+  if (severity === "critical") return 0;
+  if (severity === "important") return 1;
+  return 2;
+}
+
+function supplementMovementLabel(type) {
+  return {
+    purchase: "Entrada",
+    sale: "Salida",
+    adjustment: "Ajuste",
+    damage: "Dano",
+    loss: "Perdida",
+    expiration: "Vencimiento",
+    correction: "Correccion",
+  }[type] || "Movimiento";
+}
+
+function formatPercent(value) {
+  return `${Number(value || 0).toFixed(1)}%`;
+}
+
+function supplementMetricCard({ title, value, helper, iconName, tone = "blue", delta = "", restricted = false, deltaTone = "" }) {
+  return `
+    <article class="supplement-kpi ${tone}">
+      <div class="supplement-kpi-top">
+        <span>${title}</span>
+        <i>${icon(iconName)}</i>
+      </div>
+      <strong>${restricted ? "Restringido" : value}</strong>
+      <small>${helper}</small>
+      ${delta ? `<em class="${deltaTone}">${delta}</em>` : ""}
+    </article>
+  `;
+}
+
+function supplementCategoryDistribution(products = activeSupplementProducts()) {
+  const groups = new Map();
+  products.forEach((product) => {
+    const current = groups.get(product.category) || { category: product.category, units: 0, cost: 0, sale: 0 };
+    current.units += product.currentStock;
+    current.cost += supplementTotalInvestment(product);
+    current.sale += supplementProjectedSale(product);
+    groups.set(product.category, current);
+  });
+  return [...groups.values()].sort((a, b) => b.sale - a.sale);
+}
+
 function todaySales() {
   const today = new Date().toDateString();
   return state.sales.filter((sale) => new Date(sale.createdAt).toDateString() === today);
@@ -1503,6 +2429,7 @@ function icon(name) {
     inventory: '<path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>',
     cash: '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M7 12h.01M17 12h.01"/>',
     cart: '<circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.6 12.42a2 2 0 0 0 2 1.58h8.8a2 2 0 0 0 1.95-1.57L21 7H5.12"/>',
+    pill: '<path d="m10.5 20.5 10-10a4.95 4.95 0 0 0-7-7l-10 10a4.95 4.95 0 0 0 7 7Z"/><path d="m8.5 8.5 7 7"/>',
     calendar: '<path d="M8 2v4"/><path d="M16 2v4"/><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18"/>',
     pos: '<path d="M6 2h12v20H6z"/><path d="M9 6h6M9 10h6M9 14h2"/>',
     receipt: '<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6"/><path d="M16 12H8"/><path d="M13 16H8"/>',
@@ -1551,6 +2478,7 @@ function renderSidebar() {
     ["pos", "Ventas", "pos", "sales"],
     ["memberships", "Membresias", "user", "memberships"],
     ["inventory", "Inventario", "inventory", "inventory-view"],
+    ["supplements", "Suplementos", "pill", "supplements-view"],
     ["reports", "Reportes", "sales", "reports-view"],
     ["settings", "Configuracion", "settings", "settings"],
   ].filter(([, , , permission]) => hasPermission(permission));
@@ -1564,8 +2492,8 @@ function renderSidebar() {
         ${mainItems.map(([id, label, iconName]) => navButton(id, label, iconName)).join("")}
       </div>
       <div class="navbar-session">
-        <span class="sidebar-session"><i></i>${activeUser().name} · ${roleLabel()}</span>
-        <button class="navbar-logout interactive-sidebar" type="button" data-session-action="logout">${icon("logout")}<span>Cerrar sesi&oacute;n</span></button>
+        <span class="sidebar-session"><i></i>${roleLabel()}</span>
+        <button class="navbar-logout interactive-sidebar" type="button" data-session-action="logout" aria-label="Cerrar sesi&oacute;n" title="Cerrar sesi&oacute;n">${icon("logout")}</button>
       </div>
     </header>
   `;
@@ -1584,6 +2512,7 @@ function renderQuickActions() {
     : [
         { tabId: "reports", label: "Reportes", iconName: "sales", permission: "reports-view" },
         { tabId: "inventory", label: "Inventario", iconName: "inventory", permission: "inventory-view" },
+        { tabId: "supplements", label: "Suplementos", iconName: "pill", permission: "supplements-view" },
       ];
   const sessionAction = state.sessionActive
     ? { action: "logout", label: "Cerrar sesi&oacute;n", iconName: "logout", className: "session-logout" }
@@ -1663,6 +2592,11 @@ function render() {
       ${renderNewProductModal()}
       ${renderSaleConfirmationModal()}
       ${renderMembershipModal()}
+      ${renderSupplementProductModal()}
+      ${renderSupplementStockModal()}
+      ${renderSupplementSaleModal()}
+      ${renderSupplementSaleDetailModal()}
+      ${renderSupplementCancelModal()}
       ${renderToastNotification()}
     </div>
   `;
@@ -1781,6 +2715,7 @@ function renderActiveTab() {
   if (state.activeTab === "cash") return renderCash();
   if (state.activeTab === "pos") return renderPos();
   if (state.activeTab === "memberships") return renderMemberships();
+  if (state.activeTab === "supplements") return renderSupplements();
   if (state.activeTab === "reports") return renderReports();
   if (state.activeTab === "settings") return renderSettings();
   if (state.activeTab === "connection") return renderConnection();
@@ -1796,6 +2731,7 @@ function normalizeActiveTab() {
   if (state.activeTab === "product-search") state.activeTab = "inventory";
   if (state.activeTab === "history") state.activeTab = "reports";
   if (state.activeTab === "cash") state.activeTab = "pos";
+  if (state.activeTab === "supplements" && !state.supplementsView) state.supplementsView = "summary";
 }
 
 function connectionLabel() {
@@ -2861,6 +3797,10 @@ function escapeAttribute(value = "") {
   return String(value).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 }
 
+function escapeHtml(value = "") {
+  return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 function productFormField(name, label, value = "", type = "text", required = false, numeric = false) {
   return `
     <div class="field">
@@ -3157,6 +4097,1330 @@ function renderMembershipModal() {
   }
 
   return "";
+}
+
+function renderSupplements() {
+  const totals = getSupplementTotals();
+  const tabs = [
+    ["summary", "Resumen", ""],
+    ["products", "Productos", ""],
+    ["sales", "Ventas", ""],
+    ["planning", "Planeacion", ""],
+    ["projects", "Proyectos", ""],
+    ["projections", "Proyecciones", ""],
+  ];
+  const view = state.supplementsView === "inventory" ? "products" : state.supplementsView || "summary";
+  const renderer = {
+    summary: renderSupplementsSummary,
+    products: renderSupplementsProducts,
+    sales: renderSupplementsSales,
+    planning: renderSupplementsPlanning,
+    projects: renderSupplementsProjects,
+    projections: renderSupplementsProjections,
+  }[view] || renderSupplementsSummary;
+
+  return `
+    <div class="supplements-shell">
+      <section class="supplements-header">
+        <div class="supplements-header-main">
+          <div class="supplements-title-block">
+            <div class="supplements-hero-icon">${icon("pill")}</div>
+            <div>
+              <h1>SUPLEMENTOS</h1>
+            </div>
+          </div>
+          ${canManageSupplements() ? `
+            <div class="supplement-header-actions">
+              <button class="button" type="button" data-open-supplement-sale>${icon("cart")}<span>Realizar Venta</span></button>
+              <button class="button secondary" type="button" data-supplement-view="planning">${icon("calendar")}<span>Crear planeacion</span></button>
+              <button class="button secondary" type="button" data-supplement-view="projects">${icon("sales")}<span>Nuevo proyecto</span></button>
+            </div>
+          ` : ""}
+        </div>
+        <nav class="supplement-tabs" aria-label="Vistas de suplementos">
+          ${tabs.map(([id, label, count]) => `<button class="${view === id ? "active" : ""}" type="button" data-supplement-view="${id}"><span>${label}</span>${count !== "" ? `<small>${count}</small>` : ""}</button>`).join("")}
+        </nav>
+      </section>
+      ${renderer()}
+    </div>
+  `;
+}
+
+function renderSupplementsSummary() {
+  const products = activeSupplementProducts();
+  const totals = getSupplementTotals(products);
+  const showMoney = canViewSupplementFinancials();
+  const settings = state.supplementMarginSettings || DEFAULT_SUPPLEMENT_MARGIN_SETTINGS;
+  const categoryDistribution = supplementCategoryDistribution(products);
+
+  return `
+    <section class="supplement-primary-grid">
+      ${supplementMetricCard({ title: "Capital invertido", value: formatCurrency(totals.investedCapital), helper: "Valor del inventario al costo", iconName: "wallet", tone: "blue", delta: "Capital agregado en periodo", restricted: !showMoney })}
+      ${supplementMetricCard({ title: "Venta proyectada", value: formatCurrency(totals.potentialSale), helper: "Venta potencial del inventario", iconName: "sales", tone: "mint", delta: showMoney ? `${formatCurrency(totals.expectedProfit)} diferencia sobre capital` : "", deltaTone: totals.expectedProfit >= 0 ? "positive" : "negative" })}
+      ${supplementMetricCard({ title: "Utilidad proyectada", value: formatCurrency(totals.expectedProfit), helper: `${formatPercent(totals.globalMargin)} margen global`, iconName: "profit", tone: "purple", delta: `Meta ${formatPercent(settings.targetMargin)}`, restricted: !showMoney })}
+      ${supplementMetricCard({ title: "Inventario activo", value: String(totals.inventoryUnits), helper: `${totals.activeProducts} activos · ${totals.lowStock} bajos · ${totals.outOfStock} agotados`, iconName: "inventory", tone: "orange" })}
+    </section>
+    ${renderSupplementSecondaryStrip(totals, settings, showMoney)}
+    <section class="supplement-summary-bottom">
+      ${renderSupplementInventoryDistribution(categoryDistribution, totals)}
+      ${renderSupplementProductPerformance(products, showMoney)}
+      ${renderSupplementProductsSummary(products, showMoney)}
+    </section>
+  `;
+}
+
+function renderSupplementSecondaryStrip(totals, settings, showMoney) {
+  const items = [
+    { title: "Margen global", value: formatPercent(totals.globalMargin), helper: `Objetivo ${formatPercent(settings.targetMargin)}`, delta: `${(totals.globalMargin - settings.targetMargin).toFixed(1)} pts`, deltaTone: totals.globalMargin >= settings.targetMargin ? "positive" : "negative", iconName: "sales", tone: "purple" },
+    { title: "Rentabilidad sobre costo", value: showMoney ? formatPercent(totals.costProfitability) : "Restringido", helper: `Meta ${formatPercent(settings.targetProfitability)}`, delta: showMoney ? `${(totals.costProfitability - settings.targetProfitability).toFixed(1)} variacion` : "Visible para Admin", deltaTone: totals.costProfitability >= settings.targetProfitability ? "positive" : "negative", iconName: "sales", tone: "blue" },
+    { title: "ROI acumulado", value: showMoney ? formatPercent(totals.roi) : "Restringido", helper: showMoney ? `${formatCurrency(totals.accumulatedProfit)} utilidad acumulada` : "Visible para Admin", delta: "Sobre capital invertido", iconName: "profit", tone: "purple" },
+    { title: "Capital recuperado", value: showMoney ? formatCurrency(totals.capitalRecovered) : "Restringido", helper: `${formatPercent(totals.recoveryPercent)} del capital`, delta: showMoney ? `${formatCurrency(totals.pendingCapital)} pendiente` : "Visible para Admin", iconName: "wallet", tone: "mint" },
+  ];
+  return `
+    <section class="supplement-secondary-strip">
+      ${items.map((item) => `
+        <article class="${item.tone}">
+          <i>${icon(item.iconName)}</i>
+          <span>${item.title}</span>
+          <strong>${item.value}</strong>
+          <small>${item.helper}</small>
+          <em class="${item.deltaTone || ""}">${item.delta}</em>
+        </article>
+      `).join("")}
+    </section>
+  `;
+}
+
+function renderSupplementInventoryDistribution(categoryDistribution, totals) {
+  const totalUnits = Math.max(1, categoryDistribution.reduce((sum, item) => sum + item.units, 0));
+  const palette = ["#7c3aed", "#2563eb", "#10b981", "#fb923c", "#94a3b8", "#38bdf8"];
+  let cursor = 0;
+  const segments = categoryDistribution.length
+    ? categoryDistribution.map((item, index) => {
+        const share = percentValue(item.units, totalUnits);
+        const start = cursor;
+        cursor += share;
+        return `${palette[index % palette.length]} ${start}% ${cursor}%`;
+      }).join(", ")
+    : "#e2e8f0 0 100%";
+  return `
+    <section class="panel supplement-visual-panel supplement-inventory-distribution">
+      <div class="panel-header compact">
+        <div>
+          <h2>Distribucion del inventario</h2>
+          <p>Por categoria y valor al costo.</p>
+        </div>
+      </div>
+      <div class="supplement-donut-layout">
+        <div class="supplement-donut" style="background: conic-gradient(${segments});">
+          <div><strong>${totals.inventoryUnits}</strong><span>unidades</span></div>
+        </div>
+        <div class="supplement-donut-legend">
+          ${categoryDistribution.slice(0, 5).map((item, index) => `
+            <div>
+              <i style="background:${palette[index % palette.length]}"></i>
+              <span>${escapeHtml(supplementCategoryLabel(item.category))}</span>
+              <strong>${formatPercent(percentValue(item.units, totalUnits))}</strong>
+              <small>${item.units} uds</small>
+            </div>
+          `).join("") || `<div class="supplement-mini-empty">Sin inventario</div>`}
+        </div>
+      </div>
+      <button class="button ghost supplement-small-action" type="button" data-supplement-view="products">Ver detalle</button>
+    </section>
+  `;
+}
+
+function renderSupplementProductPerformance(products, showMoney) {
+  const topProfitProducts = products.slice().sort((a, b) => supplementExpectedProfit(b) - supplementExpectedProfit(a)).slice(0, 5);
+  return `
+    <section class="panel supplement-visual-panel supplement-product-performance">
+      <div class="panel-header compact">
+        <div>
+          <h2>Rendimiento por producto</h2>
+          <p>Utilidad proyectada y margen por referencia.</p>
+        </div>
+        <button class="link-button" type="button" data-supplement-view="products">Ver analisis completo</button>
+      </div>
+      ${showMoney ? supplementPerformanceBars(topProfitProducts) : `<div class="supplement-mini-empty">Visible para Admin</div>`}
+    </section>
+  `;
+}
+
+function renderSupplementProductsSummary(products, showMoney) {
+  const pageSize = 5;
+  return `
+    <section class="panel supplement-visual-panel supplement-products-summary">
+      <div class="panel-header compact">
+        <div>
+          <h2>Resumen de productos</h2>
+          <p>Vista compacta de inventario y margen.</p>
+        </div>
+        <button class="link-button" type="button" data-supplement-view="products">Ver todos</button>
+      </div>
+      <div class="table-wrap supplement-compact-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th>Stock</th>
+              <th>Costo</th>
+              <th>Venta</th>
+              <th>Margen</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${products.slice(0, pageSize).map((product) => {
+              const marginState = supplementMarginState(product);
+              return `
+                <tr>
+                  <td><div class="supplement-table-product">${renderProductThumbnail(product, "supplement-product-mini")}<strong>${escapeHtml(product.name)}</strong></div></td>
+                  <td>${product.currentStock}</td>
+                  <td>${showMoney ? formatCurrency(supplementTotalInvestment(product)) : "-"}</td>
+                  <td>${formatCurrency(supplementProjectedSale(product))}</td>
+                  <td><span class="supplement-margin-indicator ${marginState.tone}">${formatPercent(supplementMargin(product))}</span></td>
+                </tr>
+              `;
+            }).join("") || `<tr><td colspan="5">${renderEmptyState("Sin suplementos", "Agrega productos para ver el resumen.")}</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+      <div class="supplement-table-footer">
+        <span>Mostrando ${Math.min(products.length, pageSize)} de ${products.length} productos</span>
+      </div>
+    </section>
+  `;
+}
+
+function supplementPerformanceBars(products) {
+  if (!products.length) return `<div class="supplement-mini-empty">Sin historial suficiente</div>`;
+  const maxProfit = Math.max(1, ...products.map((product) => Math.max(0, supplementExpectedProfit(product))));
+  return `
+    <div class="supplement-performance-bars">
+      ${products.map((product) => {
+        const profit = Math.max(0, supplementExpectedProfit(product));
+        const marginState = supplementMarginState(product);
+        return `
+          <div>
+            <span>${escapeHtml(product.name)}</span>
+            <i><b style="width:${Math.max(4, percentValue(profit, maxProfit))}%"></b></i>
+            <strong>${formatCurrency(profit)}</strong>
+            <small class="${marginState.tone}">${formatPercent(supplementMargin(product))}</small>
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function filteredSupplementSales() {
+  const query = normalizeHeader(state.supplementSaleSearch || "");
+  return (state.supplementSales || [])
+    .filter((sale) => !query || normalizeHeader(sale.productName).includes(query) || normalizeHeader(sale.customerName || "").includes(query))
+    .filter((sale) => !state.supplementSaleDateFilter || toDateKey(new Date(sale.createdAt)) === state.supplementSaleDateFilter)
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
+function renderSupplementsSales() {
+  const totals = getSupplementSalesTotals(completedSupplementSales());
+  const recentSales = filteredSupplementSales();
+
+  return `
+    <section class="supplement-sales-kpis">
+      ${supplementMetricCard({ title: "Ventas totales", value: formatCurrency(totals.revenue), helper: "Historial acumulado", iconName: "cash", tone: "blue" })}
+      ${supplementMetricCard({ title: "Utilidad total", value: formatCurrency(totals.profit), helper: "Ganancia neta acumulada", iconName: "profit", tone: "purple" })}
+      ${supplementMetricCard({ title: "Unidades vendidas", value: String(totals.units), helper: "Unidades completadas", iconName: "inventory", tone: "mint" })}
+      ${supplementMetricCard({ title: "Numero de ventas", value: String(totals.count), helper: "Ventas completadas", iconName: "receipt", tone: "orange" })}
+    </section>
+    ${renderSectionPanel("Ventas registradas", "Historial permanente e independiente de caja y ventas generales.", `
+      <div class="table-wrap supplement-table-wrap supplement-sales-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Producto</th>
+              <th>Cantidad</th>
+              <th>Total</th>
+              <th>Utilidad</th>
+              <th>Metodo de pago</th>
+              <th>Usuario</th>
+              <th>Estado</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${recentSales.map((sale) => `
+              <tr>
+                <td>${formatDate(sale.createdAt)}</td>
+                <td><strong>${escapeHtml(supplementSaleProductDisplayName(sale))}</strong>${sale.customerName ? `<span>${escapeHtml(sale.customerName)}</span>` : ""}</td>
+                <td>${sale.quantity}</td>
+                <td>${formatCurrency(sale.subtotal)}</td>
+                <td>${formatCurrency(sale.profit)}</td>
+                <td>${escapeHtml(supplementPaymentLabel(sale.paymentMethod))}</td>
+                <td>${escapeHtml(sale.userName || "Sistema")}</td>
+                <td><span class="supplement-sale-status ${sale.status === "cancelled" ? "cancelled" : "completed"}">${sale.status === "cancelled" ? "Anulada" : "Completada"}</span></td>
+                <td><div class="supplement-sale-actions"><button class="sale-action view" type="button" data-view-supplement-sale="${sale.id}" title="Ver detalle">${icon("receipt")}<span>Ver</span></button>${sale.status !== "cancelled" ? `<button class="sale-action cancel" type="button" data-cancel-supplement-sale="${sale.id}" title="Anular venta">${icon("renew")}<span>Anular</span></button>` : ""}</div></td>
+              </tr>
+            `).join("") || `<tr><td colspan="9">${renderEmptyState("Sin ventas", "Registra una venta de suplementos para crear historial.")}</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    `)}
+  `;
+}
+
+function renderSupplementFinancialTable(products = filteredSupplementProducts(), showMoney = canViewSupplementFinancials()) {
+  if (!products.length) return renderSectionPanel("Analisis financiero", "Sin productos para calcular.", renderEmptyState("Sin suplementos", "Agrega productos para ver el analisis."));
+  const totals = getSupplementTotals(products);
+  return renderSectionPanel("Analisis financiero", "Producto por producto con inversion, venta proyectada y margen.", `
+    <div class="table-wrap supplement-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Producto</th>
+            <th>Marca</th>
+            <th>Cant.</th>
+            ${showMoney ? "<th>Costo</th><th>Costo adic.</th><th>Costo real</th>" : ""}
+            <th>Precio</th>
+            ${showMoney ? "<th>Inversion</th>" : ""}
+            <th>Venta proyectada</th>
+            ${showMoney ? "<th>Ganancia unit.</th><th>Ganancia total</th><th>Margen</th><th>Rentab.</th>" : ""}
+            <th>Stock</th>
+            <th>Estado</th>
+            ${canManageSupplements() ? "<th>Acciones</th>" : ""}
+          </tr>
+        </thead>
+        <tbody>
+          ${products.map((product) => {
+            const status = supplementStatus(product);
+            const marginState = supplementMarginState(product);
+            return `
+              <tr>
+                <td><strong>${escapeHtml(product.name)}</strong><span>${escapeHtml(supplementCategoryLabel(product.category))} · ${escapeHtml(product.sku)}</span></td>
+                <td>${escapeHtml(product.brand || "-")}</td>
+                <td>${product.currentStock}</td>
+                ${showMoney ? `<td>${formatCurrency(product.purchaseCost)}</td><td>${formatCurrency(product.additionalUnitCost)}</td><td>${formatCurrency(product.totalUnitCost)}</td>` : ""}
+                <td><strong>${formatCurrency(product.salePrice)}</strong></td>
+                ${showMoney ? `<td>${formatCurrency(supplementTotalInvestment(product))}</td>` : ""}
+                <td>${formatCurrency(supplementProjectedSale(product))}</td>
+                ${showMoney ? `<td>${formatCurrency(product.salePrice - product.totalUnitCost)}</td><td>${formatCurrency(supplementExpectedProfit(product))}</td><td><span class="supplement-pill ${marginState.tone}" title="${escapeAttribute(marginState.helper)}">${formatPercent(supplementMargin(product))}</span></td><td>${formatPercent(supplementProfitability(product))}</td>` : ""}
+                <td>${product.currentStock}/${product.minimumStock}</td>
+                <td>${renderStatusBadge(status.label, status.tone)}</td>
+                ${canManageSupplements() ? `<td><details class="supplement-row-menu"><summary>${icon("settings")}</summary><div><button type="button" data-edit-supplement="${product.id}">Editar</button><button type="button" data-supplement-stock="${product.id}">Movimiento</button><button type="button" data-duplicate-supplement="${product.id}">Duplicar</button><button type="button" data-toggle-supplement="${product.id}">${product.isActive ? "Desactivar" : "Activar"}</button></div></details></td>` : ""}
+              </tr>
+            `;
+          }).join("")}
+        </tbody>
+        ${showMoney ? `
+          <tfoot>
+            <tr>
+              <td colspan="2"><strong>Totales</strong></td>
+              <td>${totals.inventoryUnits}</td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td>${formatCurrency(totals.investedCapital)}</td>
+              <td>${formatCurrency(totals.potentialSale)}</td>
+              <td></td>
+              <td>${formatCurrency(totals.expectedProfit)}</td>
+              <td>${formatPercent(totals.globalMargin)}</td>
+              <td>${formatPercent(totals.costProfitability)}</td>
+              <td></td>
+              <td></td>
+              ${canManageSupplements() ? "<td></td>" : ""}
+            </tr>
+          </tfoot>
+        ` : ""}
+      </table>
+    </div>
+  `);
+}
+
+function renderSupplementsProducts() {
+  const showMoney = canViewSupplementFinancials();
+  const manage = canManageSupplements();
+  const products = activeSupplementProducts().slice().sort(supplementProductOrder);
+  const totals = getSupplementTotals(products);
+  const movements = [...state.supplementMovements].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 30);
+  return `
+    <section class="supplement-inventory-summary">
+      ${supplementMetricCard({ title: "Unidades disponibles", value: String(totals.inventoryUnits), helper: `${totals.activeProducts} productos activos`, iconName: "inventory", tone: "blue" })}
+      ${supplementMetricCard({ title: "Valor al costo", value: formatCurrency(totals.investedCapital), helper: "Inventario valorizado", iconName: "wallet", tone: "blue", restricted: !showMoney })}
+      ${supplementMetricCard({ title: "Valor potencial", value: formatCurrency(totals.potentialSale), helper: "Precio x unidades", iconName: "sales", tone: "mint" })}
+      ${supplementMetricCard({ title: "Inventario bajo", value: String(totals.lowStock), helper: `${totals.outOfStock} productos agotados`, iconName: "alert", tone: totals.outOfStock ? "red" : "orange" })}
+      ${supplementMetricCard({ title: "Rotacion estimada", value: formatPercent(totals.rotation), helper: "Segun salidas registradas", iconName: "renew", tone: "purple" })}
+    </section>
+    ${renderSectionPanel("Productos", "Catalogo independiente de suplementos.", `
+      <div class="supplement-product-grid">
+        ${products.map((product) => renderSupplementProductCard(product, showMoney, manage)).join("") || renderEmptyState("Sin productos", "Cambia los filtros o agrega un suplemento.")}
+      </div>
+    `, manage ? `<button class="button supplement-add-product-action" type="button" id="open-supplement-product-secondary">${icon("pill")}<span>Agregar producto</span></button>` : "")}
+    ${renderSectionPanel("Historial de movimientos", "Entradas, salidas y ajustes de suplementos.", movements.length ? `<div class="movement-list">${movements.map((movement) => {
+      const product = state.supplementProducts.find((item) => item.id === movement.productId);
+      return `<div class="movement-item"><span>${icon(movement.type === "sale" ? "cart" : "inventory")}</span><div><strong>${escapeHtml(product?.name || "Suplemento")}</strong><small>${movement.quantity > 0 ? "+" : ""}${movement.quantity} unidades · ${escapeHtml(movement.reason || "Ajuste")} · ${escapeHtml(movement.userName || "Sistema")}</small></div><time>${formatDate(movement.createdAt)}</time></div>`;
+    }).join("")}</div>` : renderEmptyState("Sin movimientos", "Los cambios de stock apareceran aqui."))}
+  `;
+}
+
+function renderSupplementProductCard(product, showMoney, manage) {
+  const status = supplementStatus(product);
+  return `
+    <article class="supplement-product-card">
+      <div class="supplement-product-head">
+        ${renderProductThumbnail(product, "supplement-product-photo")}
+        <div>
+          <strong>${escapeHtml(product.name)}</strong>
+          <span>${escapeHtml(product.brand || "Sin marca")} · ${escapeHtml(supplementCategoryLabel(product.category))}</span>
+        </div>
+        ${renderStatusBadge(status.label, status.tone)}
+      </div>
+      <div class="supplement-product-line">
+        <span>${product.currentStock} uds</span>
+        ${showMoney ? `<span>Costo ${formatCurrency(product.totalUnitCost)}</span>` : ""}
+        <span>Venta ${formatCurrency(product.salePrice)}</span>
+      </div>
+      <div class="supplement-card-footer">
+        ${manage ? `<div class="table-actions supplement-product-actions"><button class="button secondary" type="button" data-supplement-stock="${product.id}">${icon("inventory")}<span>Surtir</span></button><button class="button secondary" type="button" data-edit-supplement="${product.id}">${icon("edit")}<span>Editar</span></button><button class="button danger" type="button" data-toggle-supplement="${product.id}">${icon("trash")}<span>${product.isActive ? "Desactivar" : "Activar"}</span></button></div>` : ""}
+      </div>
+    </article>
+  `;
+}
+
+function renderSupplementsPlanning() {
+  const totals = getSupplementTotals();
+  const plans = state.supplementOrderPlans || [];
+  const suggestedBudget = totals.lowStock ? totals.investedCapital * 0.35 : 0;
+  return renderSectionPanel("Planeacion de compras", "Planes preparados para surtir sin improvisar.", `
+    <div class="supplement-toolbar">
+      <button class="button" type="button" data-supplement-view="planning">${icon("calendar")}<span>Nueva planeacion</span></button>
+      <button class="button secondary" type="button">${icon("renew")}<span>Duplicar planeacion</span></button>
+      <button class="button secondary" type="button">${icon("sales")}<span>Comparar escenarios</span></button>
+      <button class="button secondary" type="button">${icon("history")}<span>Ver historial</span></button>
+    </div>
+    <div class="supplement-plan-grid">
+      <article><span>Presupuesto sugerido</span><strong>${formatCurrency(suggestedBudget)}</strong><small>${totals.lowStock ? "Basado en alertas activas." : "Sin reposicion pendiente."}</small></article>
+      <article><span>Reposicion prioritaria</span><strong>${totals.lowStock}</strong><small>Productos bajo minimo o agotados.</small></article>
+      <article><span>Venta potencial</span><strong>${formatCurrency(totals.potentialSale)}</strong><small>Stock actual disponible.</small></article>
+    </div>
+    ${renderSupplementPlanningEditor(totals)}
+    <div class="supplement-list">${plans.map((plan) => `<article><div><strong>${escapeHtml(plan.name)}</strong><span>${escapeHtml(plan.supplierName || "Proveedor pendiente")} · ${escapeHtml(plan.status)}</span></div><strong>${formatCurrency(plan.budget || 0)}</strong></article>`).join("") || renderEmptyState("Sin planes", "Crea planes desde Supabase o usa esta base para la siguiente fase.")}</div>
+  `);
+}
+
+function renderSupplementPlanningEditor(totals) {
+  const products = activeSupplementProducts()
+    .filter((product) => product.currentStock <= product.minimumStock)
+    .sort(supplementProductOrder);
+  const suggestedBudget = products.reduce((sum, product) => sum + Math.max(product.minimumStock * 2 - product.currentStock, 1) * product.totalUnitCost, 0);
+  const plannedSale = products.reduce((sum, product) => sum + Math.max(product.minimumStock * 2 - product.currentStock, 1) * product.salePrice, 0);
+  const plannedProfit = plannedSale - suggestedBudget;
+  return `
+    <div class="supplement-planning-editor">
+      <div class="table-wrap supplement-table-wrap">
+        <table>
+          <thead><tr><th>Producto</th><th>Cant.</th><th>Costo real</th><th>Precio</th><th>Margen</th><th>Inversion</th><th>Venta</th><th>Utilidad</th><th>Alerta</th></tr></thead>
+          <tbody>
+            ${products.length ? products.map((product) => {
+              const quantity = Math.max(product.minimumStock * 2 - product.currentStock, 1);
+              const investment = quantity * product.totalUnitCost;
+              const sale = quantity * product.salePrice;
+              const profit = sale - investment;
+              const marginState = supplementMarginState(product);
+              return `<tr><td><strong>${escapeHtml(product.name)}</strong><span>${escapeHtml(product.sku)}</span></td><td>${quantity}</td><td>${formatCurrency(product.totalUnitCost)}</td><td>${formatCurrency(product.salePrice)}</td><td><span class="supplement-pill ${marginState.tone}">${formatPercent(supplementMargin(product))}</span></td><td>${formatCurrency(investment)}</td><td>${formatCurrency(sale)}</td><td>${formatCurrency(profit)}</td><td>${product.currentStock === 0 ? "Agotado" : "Bajo"}</td></tr>`;
+            }).join("") : `<tr><td colspan="9">${renderEmptyState("Sin reposicion pendiente", "Todos los suplementos estan por encima del minimo configurado.")}</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+      <aside class="supplement-planning-summary">
+        <strong>Resumen financiero</strong>
+        <span><small>Capital sugerido</small><b>${formatCurrency(suggestedBudget)}</b></span>
+        <span><small>Venta proyectada</small><b>${formatCurrency(plannedSale)}</b></span>
+        <span><small>Utilidad esperada</small><b>${formatCurrency(plannedProfit)}</b></span>
+        <span><small>Margen estimado</small><b>${formatPercent(percentValue(plannedProfit, plannedSale))}</b></span>
+        <small>Editor base para preparar pedidos futuros sin tocar inventario real.</small>
+      </aside>
+    </div>
+  `;
+}
+
+function renderSupplementsProjects() {
+  const totals = getSupplementTotals();
+  return renderSectionPanel("Proyectos", "Campanas, vitrinas y ciclos comerciales del modulo.", `
+    <div class="supplement-toolbar">
+      <button class="button" type="button">${icon("sales")}<span>Crear proyecto</span></button>
+      <button class="button secondary" type="button">${icon("edit")}<span>Editar</span></button>
+      <button class="button secondary" type="button">${icon("renew")}<span>Duplicar</span></button>
+      <button class="button secondary" type="button" data-supplement-view="projections">${icon("history")}<span>Generar proyeccion</span></button>
+    </div>
+    <div class="supplement-project-grid">
+      ${(state.supplementProjects || []).map((project) => `<article><span>${renderStatusBadge(project.status === "active" ? "Activo" : project.status, project.status === "active" ? "ok" : "muted")}</span><strong>${escapeHtml(project.name)}</strong><p>${escapeHtml(project.objective || "Sin objetivo registrado.")}</p><div class="progress mint"><span style="width:${Math.min(100, totals.recoveryPercent)}%"></span></div><small>Capital actual ${formatCurrency(totals.investedCapital)} · meta ${formatCurrency(totals.potentialSale)} · ciclo ${nextSupplementCycleLabel()}</small></article>`).join("") || renderEmptyState("Sin proyectos", "Registra proyectos comerciales para comparar proyeccion contra resultados.")}
+    </div>
+  `);
+}
+
+function renderSupplementsProjections() {
+  const totals = getSupplementTotals();
+  const scenarios = [
+    ["Conservador", 30, 60, 60, 0.6],
+    ["Esperado", 35, 80, 80, 1],
+    ["Optimista", 40, 95, 100, 1.35],
+  ];
+  const cycles = buildSupplementProjectionCycles(totals, scenarios[1]);
+  return renderSectionPanel("Proyecciones", "Escenarios listos para ciclos de venta y comparacion proyectado vs real.", `
+    <div class="supplement-projection-grid">${scenarios.map(([label, margin, soldPercent, reinvest, factor]) => {
+      const soldCost = totals.investedCapital * (soldPercent / 100);
+      const revenue = soldCost / (1 - margin / 100);
+      const profit = revenue - soldCost;
+      return `<article><span>${label}</span><strong>${formatCurrency(revenue)}</strong><small>${canViewSupplementFinancials() ? `${formatCurrency(profit)} utilidad · ${soldPercent}% vendido · ${reinvest}% reinversion` : "Utilidad restringida"}</small></article>`;
+    }).join("")}</div>
+    <div class="table-wrap supplement-table-wrap"><table><thead><tr><th>Ciclo</th><th>Inicio</th><th>Final</th><th>Capital inicial</th><th>Inversion</th><th>Venta proy.</th><th>Utilidad</th><th>Margen</th><th>Reinversion</th><th>Capital final</th><th>Real</th><th>Diferencia</th><th>Estado</th></tr></thead><tbody>${cycles.map((cycle) => `<tr><td><strong>${cycle.number}</strong></td><td>${formatShortDate(cycle.start)}</td><td>${formatShortDate(cycle.end)}</td><td>${formatCurrency(cycle.initialCapital)}</td><td>${formatCurrency(cycle.investment)}</td><td>${formatCurrency(cycle.revenue)}</td><td>${canViewSupplementFinancials() ? formatCurrency(cycle.profit) : "Restringido"}</td><td>${formatPercent(cycle.margin)}</td><td>${formatCurrency(cycle.reinvested)}</td><td>${formatCurrency(cycle.finalCapital)}</td><td>${formatCurrency(cycle.actualCapital)}</td><td>${formatCurrency(cycle.difference)}</td><td>${renderStatusBadge(cycle.status, cycle.status === "Proyectado" ? "ok" : "muted")}</td></tr>`).join("")}</tbody></table></div>
+  `);
+}
+
+function buildSupplementProjectionCycles(totals, scenario) {
+  const [, margin, soldPercent, reinvestPercent] = scenario;
+  const cycles = [];
+  let capital = totals.investedCapital || totals.potentialSale || 1;
+  for (let index = 0; index < 4; index += 1) {
+    const start = new Date();
+    start.setDate(start.getDate() + index * 15);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 14);
+    const investment = capital;
+    const soldCost = investment * (soldPercent / 100);
+    const revenue = margin >= 100 ? soldCost : soldCost / (1 - margin / 100);
+    const profit = revenue - soldCost;
+    const reinvested = profit * (reinvestPercent / 100);
+    const unsoldCapital = investment - soldCost;
+    const recoveredCost = soldCost;
+    const finalCapital = unsoldCapital + recoveredCost + reinvested;
+    cycles.push({
+      number: index + 1,
+      start: toDateKey(start),
+      end: toDateKey(end),
+      initialCapital: capital,
+      investment,
+      revenue,
+      profit,
+      margin,
+      reinvested,
+      finalCapital,
+      actualCapital: index === 0 ? totals.capitalRecovered : 0,
+      difference: (index === 0 ? totals.capitalRecovered : 0) - finalCapital,
+      status: "Proyectado",
+    });
+    capital = finalCapital;
+  }
+  return cycles;
+}
+
+function nextSupplementCycleLabel() {
+  const datedPlans = (state.supplementOrderPlans || []).filter((plan) => plan.plannedDate).sort((a, b) => new Date(a.plannedDate) - new Date(b.plannedDate));
+  return datedPlans[0]?.plannedDate ? formatShortDate(datedPlans[0].plannedDate) : "Por definir";
+}
+
+function renderSupplementProductModal() {
+  if (!state.supplementProductModalOpen || !canManageSupplements()) return "";
+  const product = state.supplementProducts.find((item) => item.id === state.supplementEditingProductId) || {};
+  const isEditing = Boolean(product.id);
+  const categoryOptions = [...new Set([...SUPPLEMENT_CATEGORIES, product.category].filter(Boolean))]
+    .map((category) => `<option value="${escapeAttribute(category)}" ${product.category === category ? "selected" : ""}>${escapeHtml(supplementCategoryLabel(category))}</option>`)
+    .join("");
+
+  return `
+    <div class="modal-backdrop" role="presentation">
+      <section class="modal-card product-modal-card supplement-modal-card" role="dialog" aria-modal="true" aria-labelledby="supplement-modal-title">
+        <div class="modal-header">
+          <div>
+            <h2 id="supplement-modal-title">${icon("pill")} ${isEditing ? "Editar suplemento" : "Agregar suplemento"}</h2>
+          </div>
+          <button class="modal-close" type="button" data-close-supplement-product aria-label="Cerrar">×</button>
+        </div>
+        <form id="supplement-product-form" class="supplement-editor-form">
+          <fieldset>
+            <legend>Informacion general</legend>
+            ${productFormField("supplementName", "Producto", product.name || "", "text", true)}
+            ${productFormField("supplementBrand", "Marca", product.brand || "", "text", false)}
+            <div class="field"><label for="supplementCategory">Categoria</label><select id="supplementCategory" name="supplementCategory">${categoryOptions}</select></div>
+            ${productFormField("supplementSku", "SKU", product.sku || "", "text", false)}
+            ${productFormField("supplementBarcode", "Codigo de barras", product.barcode || "", "text", false)}
+            ${productFormField("supplementSupplierName", "Proveedor", product.supplierName || "", "text", false)}
+            ${productFormField("supplementImageUrl", "Imagen URL", product.imageUrl || "", "url", false)}
+          </fieldset>
+          <fieldset>
+            <legend>Costos</legend>
+            ${moneyField("supplementPurchaseCost", "Costo compra", product.purchaseCost || 0, true)}
+            ${moneyField("supplementTransportCost", "Transporte unidad", product.transportUnitCost || 0)}
+            ${moneyField("supplementTaxCost", "Impuestos unidad", product.taxUnitCost || 0)}
+            ${moneyField("supplementCommissionCost", "Comision unidad", product.commissionUnitCost || 0)}
+            ${moneyField("supplementOtherCost", "Otros costos", product.otherUnitCost || 0)}
+          </fieldset>
+          <fieldset>
+            <legend>Precio y margen</legend>
+            ${moneyField("supplementSalePrice", "Precio de venta", product.salePrice || 0, true)}
+            ${productFormField("supplementTargetMargin", "Margen objetivo %", product.targetMarginPercent || state.supplementMarginSettings.targetMargin, "number", false)}
+            ${renderSupplementProductPreview(product)}
+          </fieldset>
+          <fieldset>
+            <legend>Inventario y relaciones</legend>
+            ${productFormField("supplementCurrentStock", "Stock actual", product.currentStock || 0, "number", true)}
+            ${productFormField("supplementMinimumStock", "Stock minimo", product.minimumStock || 0, "number", true)}
+            <div class="field product-form-wide">
+              <label for="supplementDescription">Descripcion</label>
+              <textarea id="supplementDescription" name="supplementDescription" rows="3">${escapeHtml(product.description || "")}</textarea>
+            </div>
+          </fieldset>
+          <div class="modal-actions">
+            <button class="button secondary" type="button" data-close-supplement-product>Cancelar</button>
+            <button class="button secondary" type="button" data-close-supplement-product>Guardar borrador</button>
+            <button class="button" type="submit">${icon("pill")}<span>Guardar cambios</span></button>
+          </div>
+        </form>
+      </section>
+    </div>
+  `;
+}
+
+function renderSupplementProductPreview(product = {}) {
+  const preview = normalizeSupplementProduct({
+    ...product,
+    purchaseCost: product.purchaseCost || 0,
+    salePrice: product.salePrice || 0,
+    currentStock: product.currentStock || 0,
+  });
+  const marginState = supplementMarginState(preview);
+  return `
+    <div class="supplement-editor-preview product-form-wide">
+      <span>Vista previa financiera</span>
+      <div>
+        <strong>Costo real ${formatCurrency(preview.totalUnitCost)}</strong>
+        <strong>Ganancia unidad ${formatCurrency(preview.salePrice - preview.totalUnitCost)}</strong>
+        <strong>Margen ${formatPercent(supplementMargin(preview))}</strong>
+        <strong>Precio sugerido ${formatCurrency(recommendedSupplementPrice(preview))}</strong>
+      </div>
+      <small class="${marginState.tone}">${marginState.label}: ${marginState.helper}</small>
+    </div>
+  `;
+}
+
+function renderSupplementStockModal() {
+  if (!state.supplementStockProductId || !canManageSupplements()) return "";
+  const product = state.supplementProducts.find((item) => item.id === state.supplementStockProductId);
+  if (!product) return "";
+
+  return `
+    <div class="modal-backdrop" role="presentation">
+      <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="supplement-stock-title">
+        <div class="modal-header">
+          <div>
+            <h2 id="supplement-stock-title">${icon("inventory")} Ajustar inventario</h2>
+            <p>${escapeHtml(product.name)} · stock actual ${product.currentStock}</p>
+          </div>
+          <button class="modal-close" type="button" data-close-supplement-stock aria-label="Cerrar">×</button>
+        </div>
+        <form id="supplement-stock-form" class="product-form">
+          <div class="field">
+            <label for="supplementMovementType">Tipo</label>
+            <select id="supplementMovementType" name="supplementMovementType">
+              <option value="purchase">Entrada</option>
+              <option value="adjustment">Ajuste positivo</option>
+              <option value="sale">Salida / venta manual</option>
+              <option value="correction">Correccion negativa</option>
+              <option value="damage">Dano</option>
+              <option value="loss">Perdida</option>
+              <option value="expiration">Vencimiento</option>
+            </select>
+          </div>
+          ${productFormField("supplementStockQuantity", "Cantidad", 1, "number", true)}
+          ${productFormField("supplementStockReason", "Motivo", "Ajuste de inventario", "text", true)}
+          <div class="field product-form-wide">
+            <label for="supplementStockObservations">Observaciones</label>
+            <textarea id="supplementStockObservations" name="supplementStockObservations" rows="3"></textarea>
+          </div>
+          <div class="modal-actions">
+            <button class="button secondary" type="button" data-close-supplement-stock>Cancelar</button>
+            <button class="button" type="submit">${icon("inventory")}<span>Registrar movimiento</span></button>
+          </div>
+        </form>
+      </section>
+    </div>
+  `;
+}
+
+function renderSupplementSaleModal() {
+  if (!state.supplementSaleModalOpen) return "";
+  const products = activeSupplementProducts().filter((product) => product.currentStock > 0).sort(supplementProductOrder);
+  const selectedProduct = products.find((product) => product.id === state.supplementSaleProductId) || products[0];
+  const quantity = Math.max(1, Math.min(Number(state.supplementSaleQuantity || 1), Math.max(1, selectedProduct?.currentStock || 1)));
+  const unitPrice = Number(state.supplementSaleUnitPrice || selectedProduct?.salePrice || 0);
+  const totalCost = quantity * Number(selectedProduct?.totalUnitCost || 0);
+  const subtotal = quantity * unitPrice;
+  const profit = subtotal - totalCost;
+  const margin = percentValue(profit, subtotal);
+  const canEditPrice = canManageSupplements();
+  const productOptions = products.map((product) => `
+    <option value="${escapeAttribute(product.id)}" ${selectedProduct?.id === product.id ? "selected" : ""}>
+      ${escapeHtml(product.name)} · ${formatCurrency(product.salePrice)} · ${product.currentStock} uds
+    </option>
+  `).join("");
+
+  return `
+    <div class="modal-backdrop" role="presentation">
+      <section class="modal-card supplement-modal-card supplement-sale-modal-card" role="dialog" aria-modal="true" aria-labelledby="supplement-sale-title">
+        <div class="modal-header">
+          <div>
+            <h2 id="supplement-sale-title">${icon("cart")} Registrar venta</h2>
+            <p>Venta independiente de la caja principal.</p>
+          </div>
+          <button class="modal-close" type="button" data-close-supplement-sale aria-label="Cerrar">×</button>
+        </div>
+        <form id="supplement-sale-form" class="supplement-sale-form">
+          ${products.length ? `
+            <div class="field product-form-wide">
+              <label for="supplementSaleProductId">Producto</label>
+              <select id="supplementSaleProductId" name="supplementSaleProductId">${productOptions}</select>
+              <small>Stock disponible: ${selectedProduct?.currentStock || 0} unidades</small>
+            </div>
+            <div class="field">
+              <label for="supplementSaleQuantity">Cantidad</label>
+              <input id="supplementSaleQuantity" name="supplementSaleQuantity" type="number" min="1" max="${escapeAttribute(selectedProduct?.currentStock || 1)}" step="1" value="${escapeAttribute(quantity)}" required />
+            </div>
+            <div class="field">
+              <label for="supplementSaleUnitPrice">Precio unitario</label>
+              <input id="supplementSaleUnitPrice" name="supplementSaleUnitPrice" type="number" min="0" step="100" value="${escapeAttribute(unitPrice)}" ${canEditPrice ? "" : "readonly"} required />
+            </div>
+            <div class="field">
+              <label for="supplementSalePaymentMethod">Metodo de pago</label>
+              <select id="supplementSalePaymentMethod" name="supplementSalePaymentMethod">
+                ${["cash", "nequi", "daviplata", "bancolombia", "transfer", "other"].map((method) => `<option value="${method}" ${state.supplementSalePaymentMethod === method ? "selected" : ""}>${supplementPaymentLabel(method)}</option>`).join("")}
+              </select>
+            </div>
+            ${productFormField("supplementSaleCustomer", "Cliente", "", "text", false)}
+            <div class="field product-form-wide">
+              <label for="supplementSaleNotes">Observacion</label>
+              <textarea id="supplementSaleNotes" name="supplementSaleNotes" rows="2"></textarea>
+            </div>
+            <div class="supplement-sale-summary product-form-wide">
+              <span><small>Subtotal</small><strong>${formatCurrency(subtotal)}</strong></span>
+              <span><small>Costo</small><strong>${formatCurrency(totalCost)}</strong></span>
+              <span><small>Utilidad</small><strong class="${profit >= 0 ? "positive" : "negative"}">${formatCurrency(profit)}</strong></span>
+              <span><small>Margen</small><strong>${formatPercent(margin)}</strong></span>
+              <span><small>Total</small><strong>${formatCurrency(subtotal)}</strong></span>
+            </div>
+          ` : renderEmptyState("Sin stock disponible", "No hay suplementos activos con unidades para vender.")}
+          <div class="modal-actions">
+            <button class="button secondary" type="button" data-close-supplement-sale>Cancelar</button>
+            ${products.length ? `<button class="button" type="submit">${icon("cart")}<span>Guardar venta</span></button>` : ""}
+          </div>
+        </form>
+      </section>
+    </div>
+  `;
+}
+
+function renderSupplementSaleDetailModal() {
+  if (!state.supplementSelectedSaleId) return "";
+  const sale = (state.supplementSales || []).find((item) => item.id === state.supplementSelectedSaleId);
+  if (!sale) return "";
+  return `
+    <div class="modal-backdrop" role="presentation">
+      <section class="modal-card supplement-sale-detail-card" role="dialog" aria-modal="true" aria-labelledby="supplement-sale-detail-title">
+        <div class="modal-header">
+          <div>
+            <h2 id="supplement-sale-detail-title">${icon("receipt")} Detalle de venta</h2>
+            <p>${formatDate(sale.createdAt)} · ${escapeHtml(supplementPaymentLabel(sale.paymentMethod))}</p>
+          </div>
+          <button class="modal-close" type="button" data-close-supplement-sale-detail aria-label="Cerrar">×</button>
+        </div>
+        <div class="supplement-sale-detail-grid">
+          <span><small>Producto</small><strong>${escapeHtml(supplementSaleProductDisplayName(sale))}</strong></span>
+          <span><small>Cantidad</small><strong>${sale.quantity}</strong></span>
+          <span><small>Precio unitario</small><strong>${formatCurrency(sale.unitPrice)}</strong></span>
+          <span><small>Costo unitario</small><strong>${formatCurrency(sale.unitCost)}</strong></span>
+          <span><small>Total</small><strong>${formatCurrency(sale.subtotal)}</strong></span>
+          <span><small>Utilidad</small><strong>${formatCurrency(sale.profit)}</strong></span>
+          <span><small>Margen</small><strong>${formatPercent(sale.marginPercentage)}</strong></span>
+          <span><small>Estado</small><strong>${sale.status === "cancelled" ? "Anulada" : "Completada"}</strong></span>
+          ${sale.customerName ? `<span><small>Cliente</small><strong>${escapeHtml(sale.customerName)}</strong></span>` : ""}
+          ${sale.notes ? `<span class="product-form-wide"><small>Observacion</small><strong>${escapeHtml(sale.notes)}</strong></span>` : ""}
+          ${sale.cancellationReason ? `<span class="product-form-wide"><small>Motivo anulacion</small><strong>${escapeHtml(sale.cancellationReason)}</strong></span>` : ""}
+        </div>
+        <div class="modal-actions">
+          <button class="button secondary" type="button" data-close-supplement-sale-detail>Cerrar</button>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function renderSupplementCancelModal() {
+  if (!state.supplementCancellingSaleId) return "";
+  const sale = (state.supplementSales || []).find((item) => item.id === state.supplementCancellingSaleId);
+  if (!sale) return "";
+  return `
+    <div class="modal-backdrop" role="presentation">
+      <section class="modal-card supplement-sale-detail-card" role="dialog" aria-modal="true" aria-labelledby="supplement-cancel-title">
+        <div class="modal-header">
+          <div>
+            <h2 id="supplement-cancel-title">${icon("renew")} Anular venta</h2>
+          <p>${escapeHtml(supplementSaleProductDisplayName(sale))} · se devolveran ${sale.quantity} unidades al inventario.</p>
+          </div>
+          <button class="modal-close" type="button" data-close-supplement-cancel aria-label="Cerrar">×</button>
+        </div>
+        <form id="supplement-cancel-form" class="product-form">
+          <div class="field product-form-wide">
+            <label for="supplementCancellationReason">Motivo</label>
+            <textarea id="supplementCancellationReason" name="supplementCancellationReason" rows="3" required></textarea>
+          </div>
+          <div class="modal-actions">
+            <button class="button secondary" type="button" data-close-supplement-cancel>Cancelar</button>
+            <button class="button danger" type="submit">${icon("renew")}<span>Anular venta</span></button>
+          </div>
+        </form>
+      </section>
+    </div>
+  `;
+}
+
+function collectSupplementProductForm(form) {
+  const data = Object.fromEntries(new FormData(form));
+  const purchaseCost = parseMoney(data.supplementPurchaseCost);
+  const transportUnitCost = parseMoney(data.supplementTransportCost);
+  const taxUnitCost = parseMoney(data.supplementTaxCost);
+  const commissionUnitCost = parseMoney(data.supplementCommissionCost);
+  const otherUnitCost = parseMoney(data.supplementOtherCost);
+  const additionalUnitCost = transportUnitCost + taxUnitCost + commissionUnitCost + otherUnitCost;
+  const totalUnitCost = purchaseCost + additionalUnitCost;
+  return normalizeSupplementProduct({
+    id: state.supplementEditingProductId || crypto.randomUUID(),
+    name: (data.supplementName || "").trim(),
+    brand: (data.supplementBrand || "").trim(),
+    category: data.supplementCategory || "Proteinas",
+    sku: (data.supplementSku || "").trim() || slugSku(data.supplementName || "suplemento").replace("IMP-", "SUP-"),
+    barcode: (data.supplementBarcode || "").trim(),
+    description: (data.supplementDescription || "").trim(),
+    imageUrl: (data.supplementImageUrl || "").trim(),
+    purchaseCost,
+    transportUnitCost,
+    taxUnitCost,
+    commissionUnitCost,
+    otherUnitCost,
+    additionalUnitCost,
+    totalUnitCost,
+    salePrice: parseMoney(data.supplementSalePrice),
+    targetMarginPercent: Number(data.supplementTargetMargin || 30),
+    currentStock: parseInteger(data.supplementCurrentStock),
+    minimumStock: parseInteger(data.supplementMinimumStock),
+    supplierName: (data.supplementSupplierName || "").trim(),
+    isActive: true,
+    createdAt: state.supplementProducts.find((item) => item.id === state.supplementEditingProductId)?.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+function openSupplementProductModal(productId = "") {
+  if (!requirePermission("supplements-manage")) return;
+  state.supplementProductModalOpen = true;
+  state.supplementEditingProductId = productId;
+  saveState();
+  render();
+}
+
+function duplicateSupplementProduct(productId) {
+  if (!requirePermission("supplements-manage")) return;
+  const product = state.supplementProducts.find((item) => item.id === productId);
+  if (!product) return;
+  const clone = normalizeSupplementProduct({
+    ...product,
+    id: crypto.randomUUID(),
+    name: `${product.name} copia`,
+    sku: `${product.sku || "SUP"}-COPY`,
+    barcode: "",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+  state.supplementProducts.push(clone);
+  state.toast = "Suplemento duplicado como borrador editable.";
+  state.supplementProductModalOpen = true;
+  state.supplementEditingProductId = clone.id;
+  saveState();
+  render();
+  dismissToastAfterDelay();
+}
+
+function updateSupplementEditorPreview() {
+  const preview = document.querySelector(".supplement-editor-preview");
+  const form = document.querySelector("#supplement-product-form");
+  if (!preview || !form) return;
+  const data = Object.fromEntries(new FormData(form));
+  const purchaseCost = parseMoney(data.supplementPurchaseCost);
+  const transportUnitCost = parseMoney(data.supplementTransportCost);
+  const taxUnitCost = parseMoney(data.supplementTaxCost);
+  const commissionUnitCost = parseMoney(data.supplementCommissionCost);
+  const otherUnitCost = parseMoney(data.supplementOtherCost);
+  const additionalUnitCost = transportUnitCost + taxUnitCost + commissionUnitCost + otherUnitCost;
+  const simulated = normalizeSupplementProduct({
+    name: data.supplementName || "Simulacion",
+    purchaseCost,
+    transportUnitCost,
+    taxUnitCost,
+    commissionUnitCost,
+    otherUnitCost,
+    additionalUnitCost,
+    totalUnitCost: purchaseCost + additionalUnitCost,
+    salePrice: parseMoney(data.supplementSalePrice),
+    targetMarginPercent: Number(data.supplementTargetMargin || state.supplementMarginSettings.targetMargin),
+    currentStock: parseInteger(data.supplementCurrentStock),
+  });
+  const marginState = supplementMarginState(simulated);
+  preview.innerHTML = `
+    <span>Vista previa financiera</span>
+    <div>
+      <strong>Costo real ${formatCurrency(simulated.totalUnitCost)}</strong>
+      <strong>Ganancia unidad ${formatCurrency(simulated.salePrice - simulated.totalUnitCost)}</strong>
+      <strong>Margen ${formatPercent(supplementMargin(simulated))}</strong>
+      <strong>Precio sugerido ${formatCurrency(recommendedSupplementPrice(simulated))}</strong>
+    </div>
+    <small class="${marginState.tone}">${marginState.label}: ${marginState.helper}</small>
+  `;
+}
+
+function closeSupplementProductModal() {
+  state.supplementProductModalOpen = false;
+  state.supplementEditingProductId = "";
+  saveState();
+  render();
+}
+
+function openSupplementStockModal(productId) {
+  if (!requirePermission("supplements-manage")) return;
+  state.supplementStockProductId = productId;
+  saveState();
+  render();
+}
+
+function closeSupplementStockModal() {
+  state.supplementStockProductId = "";
+  saveState();
+  render();
+}
+
+function openSupplementSaleModal(productId = "") {
+  if (!requirePermission("supplements-manage")) return;
+  const product = activeSupplementProducts().find((item) => item.id === productId && item.currentStock > 0)
+    || activeSupplementProducts().find((item) => item.currentStock > 0);
+  if (!product) {
+    alert("No hay suplementos activos con stock disponible.");
+    return;
+  }
+  state.supplementSaleModalOpen = true;
+  state.supplementSaleProductId = product.id;
+  state.supplementSaleQuantity = 1;
+  state.supplementSaleUnitPrice = product.salePrice;
+  state.supplementSalePaymentMethod = state.supplementSalePaymentMethod || "cash";
+  saveState();
+  render();
+}
+
+function closeSupplementSaleModal() {
+  state.supplementSaleModalOpen = false;
+  saveState();
+  render();
+}
+
+function closeSupplementSaleDetailModal() {
+  state.supplementSelectedSaleId = "";
+  saveState();
+  render();
+}
+
+function closeSupplementCancelModal() {
+  state.supplementCancellingSaleId = "";
+  saveState();
+  render();
+}
+
+function updateSupplementSaleDraft(event) {
+  const form = event.currentTarget.form || document.querySelector("#supplement-sale-form");
+  if (!form) return;
+  const data = Object.fromEntries(new FormData(form));
+  const selectedProduct = state.supplementProducts.find((item) => item.id === data.supplementSaleProductId);
+  const productChanged = event.currentTarget.name === "supplementSaleProductId";
+  state.supplementSaleProductId = data.supplementSaleProductId || state.supplementSaleProductId;
+  state.supplementSaleQuantity = Math.max(1, parseInteger(data.supplementSaleQuantity || 1));
+  state.supplementSaleUnitPrice = productChanged ? Number(selectedProduct?.salePrice || 0) : parseMoney(data.supplementSaleUnitPrice);
+  state.supplementSalePaymentMethod = data.supplementSalePaymentMethod || state.supplementSalePaymentMethod || "cash";
+  saveState();
+  render();
+}
+
+async function saveSupplementSale(event) {
+  event.preventDefault();
+  if (!requirePermission("supplements-manage")) return;
+  const data = Object.fromEntries(new FormData(event.currentTarget));
+  const product = state.supplementProducts.find((item) => item.id === data.supplementSaleProductId && item.isActive);
+  if (!product) {
+    alert("Selecciona un producto activo.");
+    return;
+  }
+  const quantity = Math.max(1, parseInteger(data.supplementSaleQuantity));
+  if (quantity > product.currentStock) {
+    alert(`Stock insuficiente. Disponible: ${product.currentStock} unidades.`);
+    return;
+  }
+  const authorizedPrice = canManageSupplements() ? parseMoney(data.supplementSaleUnitPrice) : product.salePrice;
+  const unitPrice = Math.max(0, authorizedPrice || product.salePrice);
+  const previousStock = product.currentStock;
+  const newStock = previousStock - quantity;
+  const unitCost = Number(product.totalUnitCost || 0);
+  const subtotal = quantity * unitPrice;
+  const totalCost = quantity * unitCost;
+  const profit = subtotal - totalCost;
+  const createdAt = new Date().toISOString();
+  const user = activeUser();
+  const sale = normalizeSupplementSale({
+    id: crypto.randomUUID(),
+    productId: product.id,
+    productName: product.name,
+    quantity,
+    unitCost,
+    unitPrice,
+    subtotal,
+    totalCost,
+    profit,
+    marginPercentage: percentValue(profit, subtotal),
+    paymentMethod: data.supplementSalePaymentMethod || "cash",
+    customerName: (data.supplementSaleCustomer || "").trim(),
+    notes: (data.supplementSaleNotes || "").trim(),
+    status: "completed",
+    createdBy: user.id || "",
+    userName: user.name || "Sistema",
+    createdAt,
+  });
+  const movement = {
+    id: crypto.randomUUID(),
+    productId: product.id,
+    type: "sale",
+    quantity: -quantity,
+    previousStock,
+    newStock,
+    reason: `Venta suplemento ${sale.id}`,
+    observations: sale.notes,
+    userName: sale.userName,
+    profit,
+    createdAt,
+  };
+
+  try {
+    if (supabaseConfigured()) await dbRegisterSupplementSale(sale, product, movement);
+  } catch (error) {
+    const message = String(error?.message || error || "");
+    if (/stock insuficiente/i.test(message)) {
+      alert(`Stock insuficiente. Disponible: ${product.currentStock} unidades.`);
+      return;
+    }
+    fallbackToLocal("Supabase no respondió al registrar la venta de suplemento. Operando en local.");
+  }
+
+  product.currentStock = newStock;
+  product.updatedAt = createdAt;
+  state.supplementSales.push(sale);
+  state.supplementMovements.push(movement);
+  state.supplementSaleModalOpen = false;
+  state.supplementSaleProductId = "";
+  state.supplementSaleQuantity = 1;
+  state.supplementSaleUnitPrice = 0;
+  state.supplementsView = "sales";
+  addMovement("ventas", `Suplementos: venta de ${quantity} x ${product.name}`);
+  state.toast = "Venta registrada correctamente.";
+  saveState();
+  render();
+  dismissToastAfterDelay();
+}
+
+async function cancelSupplementSale(event) {
+  event.preventDefault();
+  if (!requirePermission("supplements-manage")) return;
+  const sale = state.supplementSales.find((item) => item.id === state.supplementCancellingSaleId);
+  if (!sale || sale.status === "cancelled") return;
+  const data = Object.fromEntries(new FormData(event.currentTarget));
+  const reason = (data.supplementCancellationReason || "").trim();
+  if (!reason) {
+    alert("Ingresa el motivo de anulacion.");
+    return;
+  }
+  const product = state.supplementProducts.find((item) => item.id === sale.productId);
+  const previousStock = Number(product?.currentStock || 0);
+  const newStock = previousStock + Number(sale.quantity || 0);
+  const cancelledAt = new Date().toISOString();
+  const movement = {
+    id: crypto.randomUUID(),
+    productId: sale.productId,
+    type: "correction",
+    quantity: sale.quantity,
+    previousStock,
+    newStock,
+    reason: "Anulacion de venta de suplemento",
+    observations: reason,
+    userName: activeUser().name || "Sistema",
+    profit: -Number(sale.profit || 0),
+    createdAt: cancelledAt,
+  };
+
+  try {
+    if (supabaseConfigured()) await dbCancelSupplementSale(sale, product, movement, reason, cancelledAt);
+  } catch (error) {
+    fallbackToLocal("Supabase no respondió al anular la venta de suplemento. Operando en local.");
+  }
+
+  sale.status = "cancelled";
+  sale.cancelledAt = cancelledAt;
+  sale.cancellationReason = reason;
+  if (product) {
+    product.currentStock = newStock;
+    product.updatedAt = cancelledAt;
+  }
+  state.supplementMovements.push(movement);
+  state.supplementCancellingSaleId = "";
+  state.toast = "Venta anulada y stock devuelto.";
+  saveState();
+  render();
+  dismissToastAfterDelay();
+}
+
+async function saveSupplementProduct(event) {
+  event.preventDefault();
+  if (!requirePermission("supplements-manage")) return;
+  const product = collectSupplementProductForm(event.currentTarget);
+  if (!product.name || product.salePrice <= 0) {
+    alert("Ingresa nombre y precio de venta valido.");
+    return;
+  }
+  const existingIndex = state.supplementProducts.findIndex((item) => item.id === product.id);
+  const nextProducts = [...state.supplementProducts];
+  if (existingIndex >= 0) nextProducts[existingIndex] = product;
+  else nextProducts.push(product);
+  state.supplementProducts = nextProducts;
+  state.supplementProductModalOpen = false;
+  state.supplementEditingProductId = "";
+
+  try {
+    if (supabaseConfigured()) await dbUpsertSupplementProduct(product);
+  } catch (error) {
+    fallbackToLocal("Supabase no respondió al guardar suplementos. Operando en local.");
+  }
+  state.toast = existingIndex >= 0 ? "Suplemento actualizado." : "Suplemento creado.";
+  saveState();
+  render();
+  dismissToastAfterDelay();
+}
+
+async function toggleSupplementProduct(productId) {
+  if (!requirePermission("supplements-manage")) return;
+  const product = state.supplementProducts.find((item) => item.id === productId);
+  if (!product) return;
+  product.isActive = !product.isActive;
+  product.updatedAt = new Date().toISOString();
+  try {
+    if (supabaseConfigured()) await dbUpsertSupplementProduct(product);
+  } catch (error) {
+    fallbackToLocal("Supabase no respondió al cambiar el estado del suplemento. Operando en local.");
+  }
+  state.toast = product.isActive ? "Suplemento activado." : "Suplemento desactivado.";
+  saveState();
+  render();
+  dismissToastAfterDelay();
+}
+
+async function saveSupplementStockMovement(event) {
+  event.preventDefault();
+  if (!requirePermission("supplements-manage")) return;
+  const product = state.supplementProducts.find((item) => item.id === state.supplementStockProductId);
+  if (!product) return;
+  const data = Object.fromEntries(new FormData(event.currentTarget));
+  const rawQuantity = parseInteger(data.supplementStockQuantity);
+  if (rawQuantity <= 0) {
+    alert("Ingresa una cantidad mayor a cero.");
+    return;
+  }
+  const negativeTypes = ["sale", "correction", "damage", "loss", "expiration"];
+  const signedQuantity = negativeTypes.includes(data.supplementMovementType) ? -rawQuantity : rawQuantity;
+  const previousStock = product.currentStock;
+  const newStock = previousStock + signedQuantity;
+  if (newStock < 0) {
+    alert("No se permite stock negativo en suplementos.");
+    return;
+  }
+  product.currentStock = newStock;
+  product.updatedAt = new Date().toISOString();
+  const movement = {
+    id: crypto.randomUUID(),
+    productId: product.id,
+    type: data.supplementMovementType || "adjustment",
+    quantity: signedQuantity,
+    previousStock,
+    newStock,
+    reason: (data.supplementStockReason || "").trim(),
+    observations: (data.supplementStockObservations || "").trim(),
+    userName: activeUser().name || "Sistema",
+    profit: signedQuantity < 0 ? (product.salePrice - product.totalUnitCost) * Math.abs(signedQuantity) : 0,
+    createdAt: new Date().toISOString(),
+  };
+  state.supplementMovements.push(movement);
+  state.supplementStockProductId = "";
+  addMovement("inventario", `Suplementos: ${movement.quantity > 0 ? "entrada" : "salida"} de ${Math.abs(movement.quantity)} x ${product.name}`);
+
+  try {
+    if (supabaseConfigured()) {
+      await dbUpsertSupplementProduct(product);
+      await dbRecordSupplementMovement(movement);
+    }
+  } catch (error) {
+    fallbackToLocal("Supabase no respondió al registrar movimiento de suplementos. Operando en local.");
+  }
+  state.toast = "Movimiento de suplemento registrado.";
+  saveState();
+  render();
+  dismissToastAfterDelay();
+}
+
+async function dbUpsertSupplementProduct(product) {
+  const userId = await dbEnsureProfile();
+  const payload = {
+    id: product.id,
+    name: product.name,
+    brand: product.brand || null,
+    category: product.category,
+    sku: product.sku || null,
+    barcode: product.barcode || null,
+    description: product.description || null,
+    image_url: product.imageUrl || null,
+    purchase_cost: product.purchaseCost,
+    additional_unit_cost: product.additionalUnitCost,
+    transport_unit_cost: product.transportUnitCost,
+    tax_unit_cost: product.taxUnitCost,
+    commission_unit_cost: product.commissionUnitCost,
+    other_unit_cost: product.otherUnitCost,
+    total_unit_cost: product.totalUnitCost,
+    sale_price: product.salePrice,
+    target_margin_percent: product.targetMarginPercent,
+    current_stock: product.currentStock,
+    minimum_stock: product.minimumStock,
+    supplier_name: product.supplierName || null,
+    is_active: product.isActive,
+    created_by: userId || null,
+    updated_at: new Date().toISOString(),
+  };
+  try {
+    return await supabaseUpsert("supplement_products", payload, "id");
+  } catch (error) {
+    const message = String(error?.message || error || "");
+    if (!/column|does not exist|could not find|schema cache/i.test(message)) throw error;
+    const fallbackPayload = { ...payload };
+    delete fallbackPayload.transport_unit_cost;
+    delete fallbackPayload.tax_unit_cost;
+    delete fallbackPayload.commission_unit_cost;
+    delete fallbackPayload.other_unit_cost;
+    return supabaseUpsert("supplement_products", fallbackPayload, "id");
+  }
+}
+
+async function dbRecordSupplementMovement(movement) {
+  const userId = await dbEnsureProfile();
+  return supabaseInsert("supplement_inventory_movements", {
+    id: movement.id,
+    product_id: movement.productId,
+    user_id: userId || null,
+    movement_type: movement.type,
+    quantity: movement.quantity,
+    previous_stock: movement.previousStock,
+    new_stock: movement.newStock,
+    reason: movement.reason || null,
+    observations: movement.observations || null,
+    user_name: movement.userName || null,
+    profit: movement.profit || 0,
+    created_at: movement.createdAt,
+  });
+}
+
+async function dbRecordSupplementSale(sale) {
+  const userId = isUuid(sale.createdBy) ? sale.createdBy : await dbEnsureProfile();
+  return supabaseInsert("supplement_sales", {
+    id: sale.id,
+    product_id: sale.productId,
+    product_name: sale.productName,
+    quantity: sale.quantity,
+    unit_cost: sale.unitCost,
+    unit_price: sale.unitPrice,
+    subtotal: sale.subtotal,
+    total_cost: sale.totalCost,
+    profit: sale.profit,
+    margin_percentage: sale.marginPercentage,
+    payment_method: sale.paymentMethod,
+    customer_name: sale.customerName || null,
+    notes: sale.notes || null,
+    status: sale.status,
+    created_by: userId || null,
+    created_at: sale.createdAt,
+    cancelled_at: sale.cancelledAt || null,
+    cancellation_reason: sale.cancellationReason || null,
+  });
+}
+
+async function dbRegisterSupplementSale(sale, product, movement) {
+  const userId = isUuid(sale.createdBy) ? sale.createdBy : await dbEnsureProfile();
+  try {
+    return await supabaseRequest("rpc/register_supplement_sale", {
+      method: "POST",
+      body: {
+        p_sale_id: sale.id,
+        p_product_id: sale.productId,
+        p_quantity: sale.quantity,
+        p_unit_price: sale.unitPrice,
+        p_payment_method: sale.paymentMethod,
+        p_customer_name: sale.customerName || null,
+        p_notes: sale.notes || null,
+        p_created_by: userId || null,
+      },
+    });
+  } catch (error) {
+    const message = String(error?.message || error || "");
+    if (!/function|schema cache|could not find|404/i.test(message)) throw error;
+    product.currentStock = movement.newStock;
+    product.updatedAt = sale.createdAt;
+    await dbRecordSupplementSale({ ...sale, createdBy: userId || sale.createdBy });
+    await dbUpsertSupplementProduct(product);
+    await dbRecordSupplementMovement(movement);
+    return null;
+  }
+}
+
+async function dbCancelSupplementSale(sale, product, movement, reason, cancelledAt) {
+  try {
+    return await supabaseRequest("rpc/cancel_supplement_sale", {
+      method: "POST",
+      body: {
+        p_sale_id: sale.id,
+        p_reason: reason,
+      },
+    });
+  } catch (error) {
+    const message = String(error?.message || error || "");
+    if (!/function|schema cache|could not find|404/i.test(message)) throw error;
+    await supabasePatch("supplement_sales", sale.id, {
+      status: "cancelled",
+      cancelled_at: cancelledAt,
+      cancellation_reason: reason,
+    });
+    if (product) {
+      product.currentStock = movement.newStock;
+      product.updatedAt = cancelledAt;
+      await dbUpsertSupplementProduct(product);
+    }
+    await dbRecordSupplementMovement(movement);
+    return null;
+  }
 }
 
 function renderSettings() {
@@ -4636,6 +6900,7 @@ function bindEvents() {
       }
       state.activeTab = button.dataset.tab;
       if (state.activeTab === "reports") state.reportsView = "";
+      syncRouteForTab(state.activeTab);
       saveState();
       render();
     });
@@ -4660,6 +6925,20 @@ function bindEvents() {
   document.querySelectorAll("[data-report-period]").forEach((button) => {
     button.addEventListener("click", () => {
       state.reportStatsPeriod = button.dataset.reportPeriod;
+      saveState();
+      render();
+    });
+  });
+  document.querySelectorAll("[data-supplement-view]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.supplementsView = button.dataset.supplementView;
+      saveState();
+      render();
+    });
+  });
+  ["supplementProjectFilter", "supplementPlanFilter", "supplementCycleFilter"].forEach((id) => {
+    document.querySelector(`#${id}`)?.addEventListener("change", (event) => {
+      state[id] = event.currentTarget.value;
       saveState();
       render();
     });
@@ -4744,6 +7023,60 @@ function bindEvents() {
   document.querySelectorAll("[data-close-member-modal]").forEach((button) => {
     button.addEventListener("click", closeMemberModal);
   });
+  document.querySelector("#open-supplement-product")?.addEventListener("click", () => openSupplementProductModal());
+  document.querySelector("#open-supplement-product-secondary")?.addEventListener("click", () => openSupplementProductModal());
+  document.querySelectorAll("[data-edit-supplement]").forEach((button) => {
+    button.addEventListener("click", () => openSupplementProductModal(button.dataset.editSupplement));
+  });
+  document.querySelectorAll("[data-duplicate-supplement]").forEach((button) => {
+    button.addEventListener("click", () => duplicateSupplementProduct(button.dataset.duplicateSupplement));
+  });
+  document.querySelectorAll("[data-toggle-supplement]").forEach((button) => {
+    button.addEventListener("click", () => toggleSupplementProduct(button.dataset.toggleSupplement));
+  });
+  document.querySelectorAll("[data-supplement-stock]").forEach((button) => {
+    button.addEventListener("click", () => openSupplementStockModal(button.dataset.supplementStock));
+  });
+  document.querySelectorAll("[data-open-supplement-sale]").forEach((button) => {
+    button.addEventListener("click", () => openSupplementSaleModal());
+  });
+  document.querySelectorAll("[data-view-supplement-sale]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.supplementSelectedSaleId = button.dataset.viewSupplementSale;
+      saveState();
+      render();
+    });
+  });
+  document.querySelectorAll("[data-cancel-supplement-sale]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.supplementCancellingSaleId = button.dataset.cancelSupplementSale;
+      saveState();
+      render();
+    });
+  });
+  document.querySelector("#supplement-product-form")?.addEventListener("submit", saveSupplementProduct);
+  document.querySelector("#supplement-product-form")?.addEventListener("input", updateSupplementEditorPreview);
+  document.querySelector("#supplement-stock-form")?.addEventListener("submit", saveSupplementStockMovement);
+  document.querySelector("#supplement-sale-form")?.addEventListener("submit", saveSupplementSale);
+  document.querySelector("#supplement-sale-form")?.querySelectorAll("select, input").forEach((input) => {
+    input.addEventListener("change", updateSupplementSaleDraft);
+  });
+  document.querySelectorAll("[data-close-supplement-product]").forEach((button) => {
+    button.addEventListener("click", closeSupplementProductModal);
+  });
+  document.querySelectorAll("[data-close-supplement-stock]").forEach((button) => {
+    button.addEventListener("click", closeSupplementStockModal);
+  });
+  document.querySelectorAll("[data-close-supplement-sale]").forEach((button) => {
+    button.addEventListener("click", closeSupplementSaleModal);
+  });
+  document.querySelectorAll("[data-close-supplement-sale-detail]").forEach((button) => {
+    button.addEventListener("click", closeSupplementSaleDetailModal);
+  });
+  document.querySelectorAll("[data-close-supplement-cancel]").forEach((button) => {
+    button.addEventListener("click", closeSupplementCancelModal);
+  });
+  document.querySelector("#supplement-cancel-form")?.addEventListener("submit", cancelSupplementSale);
   document.querySelector("#confirm-renew-member")?.addEventListener("click", confirmRenewMembership);
   document.querySelector("#confirm-delete-member")?.addEventListener("click", confirmDeleteMembership);
   document.querySelector("#user-form")?.addEventListener("submit", addSystemUser);
@@ -4923,7 +7256,7 @@ function closeTransientUiOverlays() {
   const closedSalesControlPanel = closeOpenSalesControlPanel();
   const closedTabMenu = closeOpenTabMenu();
 
-  if (state.newProductModalOpen || state.stockProductId || state.memberModalMode || state.selectedMemberId || state.pendingSale || state.saleNewPanelOpen) {
+  if (state.newProductModalOpen || state.stockProductId || state.memberModalMode || state.selectedMemberId || state.pendingSale || state.saleNewPanelOpen || state.supplementProductModalOpen || state.supplementStockProductId || state.supplementSaleModalOpen || state.supplementSelectedSaleId || state.supplementCancellingSaleId) {
     state.newProductModalOpen = false;
     state.editingProductId = "";
     state.stockProductId = "";
@@ -4931,6 +7264,12 @@ function closeTransientUiOverlays() {
     state.selectedMemberId = "";
     state.pendingSale = null;
     state.saleNewPanelOpen = false;
+    state.supplementProductModalOpen = false;
+    state.supplementEditingProductId = "";
+    state.supplementStockProductId = "";
+    state.supplementSaleModalOpen = false;
+    state.supplementSelectedSaleId = "";
+    state.supplementCancellingSaleId = "";
     saveState();
     return true;
   }
