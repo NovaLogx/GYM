@@ -1,21 +1,45 @@
 if (!window.BODY_FIT_ENV) {
-  await import(`/api/bodyfit-env.js?v=${Date.now()}`);
+  try {
+    await import(`/api/bodyfit-env.js?v=${Date.now()}`);
+  } catch (error) {
+    window.BODY_FIT_ENV = {};
+  }
 }
 
 const env = window.BODY_FIT_ENV || {};
 const DEFAULT_SUPABASE_URL = env.SUPABASE_URL || "";
 const DEFAULT_SUPABASE_ANON_KEY = env.SUPABASE_ANON_KEY || "";
 const MEMBERSHIP_PRICE = 50000;
+const RUNTIME_MODE_KEY = "bodyfit.runtime-mode.v1";
 const ROLE_PERMISSIONS = {
   "super-admin": ["dashboard", "sales", "inventory-view", "inventory-edit", "memberships", "cash-view", "cash-open", "cash-edit", "reports-view", "reports-edit", "history", "settings", "users-manage", "connection"],
   admin: ["dashboard", "sales", "inventory-view", "inventory-edit", "memberships", "cash-view", "cash-open", "reports-view", "history"],
-  operator: ["dashboard", "sales", "inventory-view", "cash-view", "cash-open"],
+  operator: ["dashboard", "sales", "inventory-view", "memberships", "cash-view", "cash-open"],
 };
 const DEFAULT_SYSTEM_USERS = [
   { name: "Super Administrador", role: "super-admin", password: "Superadmin" },
   { name: "Administrador", role: "admin", password: "" },
   { name: "Operador", role: "operator", password: "" },
 ];
+const DEFAULT_INVENTORY_SEED = [
+  { name: "Agua litro", sku: "AGUA-LITRO", category: "Aguas", quantity: 12, minQuantity: 4, idealQuantity: 12, purchaseCostTotal: 20000, purchaseCost: 1666, salePrice: 3500, imageUrl: "./assets/product-images/agua-litro-current.jpg" },
+  { name: "Agua personal", sku: "AGUA-PERSONAL", category: "Aguas", quantity: 24, minQuantity: 8, idealQuantity: 24, purchaseCostTotal: 26000, purchaseCost: 1083, salePrice: 2500, imageUrl: "./assets/product-images/agua-personal.png" },
+  { name: "Vive 100", sku: "VIVE-100", category: "Hidratantes", quantity: 6, minQuantity: 2, idealQuantity: 6, purchaseCostTotal: 13000, purchaseCost: 2166, salePrice: 3000, imageUrl: "./assets/product-images/vive100-current.jpg" },
+  { name: "Amper", sku: "AMPER", category: "Energizantes", quantity: 6, minQuantity: 2, idealQuantity: 6, purchaseCostTotal: 17000, purchaseCost: 2833, salePrice: 4000, imageUrl: "./assets/product-images/amper-current.jpg" },
+  { name: "Squash", sku: "SQUASH", category: "Hidratantes", quantity: 12, minQuantity: 4, idealQuantity: 12, purchaseCostTotal: 31000, purchaseCost: 2583, salePrice: 3500, imageUrl: "./assets/product-images/squash-current.jpg" },
+];
+
+function persistRuntimeMode(mode) {
+  try {
+    if (mode === "local") {
+      localStorage.setItem(RUNTIME_MODE_KEY, "local");
+    } else {
+      localStorage.removeItem(RUNTIME_MODE_KEY);
+    }
+  } catch (error) {
+    console.warn("No se pudo guardar el modo de ejecucion.", error);
+  }
+}
 
 const initialState = {
   booting: true,
@@ -66,12 +90,49 @@ const initialState = {
 };
 
 const SESSION_STORAGE_KEY = "bodyfit.session.v1";
+const LOCAL_STATE_STORAGE_KEY = "bodyfit.local-state.v1";
+let supabaseRuntimeFallback = (() => {
+  try {
+    return localStorage.getItem(RUNTIME_MODE_KEY) === "local";
+  } catch (error) {
+    return false;
+  }
+})();
+const LEGACY_SESSION_KEYS = new Set([
+  "activeTab",
+  "settingsView",
+  "reportsView",
+  "reportStatsPeriod",
+  "reportStatsDate",
+  "reportStatsStartDate",
+  "reportStatsEndDate",
+  "currentUserId",
+  "sessionActive",
+  "user",
+  "salePaymentMethod",
+  "saleNewPanelOpen",
+  "historyMonth",
+  "historyWeekStart",
+]);
+const LOCAL_STATE_KEYS = new Set([
+  "users",
+  "currentUserId",
+  "sessionActive",
+  "user",
+  "products",
+  "members",
+  "sales",
+  "cashRegister",
+  "cashMovements",
+  "movements",
+]);
 const savedSession = loadSavedSession();
 let state = normalizeState({
   ...initialState,
   ...savedSession,
-  booting: !savedSession.sessionActive,
+  booting: true,
 });
+let inventoryBootstrapAttempted = false;
 
 function normalizeState(nextState) {
   const users = Array.isArray(nextState.users) ? nextState.users : [];
@@ -85,7 +146,7 @@ function normalizeState(nextState) {
     users,
     currentUserId,
     user: currentUser ? { id: currentUser.id, name: currentUser.name, role: currentUser.role, password: currentUser.password || "" } : { name: "Sin sesión", role: "" },
-    sessionActive: Boolean(nextState.sessionActive && currentUser),
+    sessionActive: Boolean(nextState.sessionActive),
     toast: "",
     members: Array.isArray(nextState.members) ? nextState.members : [],
     products: products.map(withInventoryWeek),
@@ -116,10 +177,143 @@ function normalizeState(nextState) {
 function loadSavedSession() {
   try {
     const savedState = JSON.parse(localStorage.getItem(SESSION_STORAGE_KEY) || "{}");
-    return savedState && typeof savedState === "object" ? savedState : {};
+    if (!savedState || typeof savedState !== "object") return {};
+    const filtered = Object.fromEntries(
+      Object.entries(savedState).filter(([key]) => LEGACY_SESSION_KEYS.has(key)),
+    );
+    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(filtered));
+    return filtered;
   } catch (error) {
     return {};
   }
+}
+
+function loadLocalState() {
+  try {
+    const savedState = JSON.parse(localStorage.getItem(LOCAL_STATE_STORAGE_KEY) || "{}");
+    if (!savedState || typeof savedState !== "object") return {};
+    return Object.fromEntries(
+      Object.entries(savedState).filter(([key]) => LOCAL_STATE_KEYS.has(key)),
+    );
+  } catch (error) {
+    return {};
+  }
+}
+
+function saveLocalState() {
+  const localState = Object.fromEntries(
+    [...LOCAL_STATE_KEYS].map((key) => [key, state[key]]),
+  );
+  localStorage.setItem(LOCAL_STATE_STORAGE_KEY, JSON.stringify(localState));
+}
+
+function defaultLocalUsers() {
+  return DEFAULT_SYSTEM_USERS.map((user) => ({
+    id: `local-${user.role}`,
+    name: user.name,
+    role: user.role,
+    password: user.password || user.role,
+  }));
+}
+
+function ensureLocalInventorySeed() {
+  if (state.products.length) return;
+  state.products = DEFAULT_INVENTORY_SEED.map((product) => withInventoryWeek({
+    id: crypto.randomUUID(),
+    status: "activo",
+    ...product,
+  }));
+}
+
+function hydrateLocalState(fallbackMessage = "Modo local activo. Los datos se guardan en este navegador.") {
+  supabaseRuntimeFallback = true;
+  persistRuntimeMode("local");
+  const localState = loadLocalState();
+  const users = Array.isArray(localState.users) && localState.users.length
+    ? localState.users
+    : defaultLocalUsers();
+  const superAdmin = users.find((user) => user.role === "super-admin") || users[0];
+
+  state = normalizeState({
+    ...state,
+    ...localState,
+    users,
+    currentUserId: localState.currentUserId || state.currentUserId || superAdmin?.id || "",
+    sessionActive: Boolean(localState.sessionActive ?? state.sessionActive ?? superAdmin),
+    booting: false,
+  });
+
+  const currentUser = activeUser();
+  if (state.sessionActive && currentUser?.id) {
+    state.currentUserId = currentUser.id;
+    state.user = { id: currentUser.id, name: currentUser.name, role: currentUser.role, password: currentUser.password || "" };
+  }
+
+  ensureLocalInventorySeed();
+  seedLocalSalesHistoryFromUrl();
+
+  state.supabase.status = "local";
+  state.supabase.message = fallbackMessage;
+  state.supabase.checkedAt = new Date().toISOString();
+  saveState();
+  render();
+}
+
+function seedLocalSalesHistoryFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const count = Math.min(5, Math.max(0, Number.parseInt(params.get("seedSalesHistory") || "0", 10) || 0));
+  if (!count || supabaseConfigured()) return;
+
+  if (state.sales.some((sale) => sale.source === "seed_history")) return;
+  if (!state.cashRegister || state.cashRegister.status !== "abierta") {
+    state.cashRegister = createCashRegister(0, "Caja abierta para historial local.");
+  }
+
+  const products = state.products.filter((product) => isActiveProduct(product) && product.quantity > 0);
+  if (!products.length) return;
+
+  for (let index = 0; index < count; index += 1) {
+    const product = products[index % products.length];
+    const quantity = 1;
+    const total = product.salePrice * quantity;
+    const cost = product.purchaseCost * quantity;
+    const createdAt = new Date(Date.now() - (count - index - 1) * 60000).toISOString();
+    const transactionId = crypto.randomUUID();
+
+    product.quantity = Math.max(0, product.quantity - quantity);
+    product.status = product.quantity === 0 ? "agotado" : "activo";
+    state.cashRegister.cashTotal += total;
+    state.sales.push({
+      id: crypto.randomUUID(),
+      transactionId,
+      productId: product.id,
+      productName: product.name,
+      quantity,
+      paymentMethod: "cash",
+      total,
+      cost,
+      profit: total - cost,
+      createdAt,
+      source: "seed_history",
+    });
+    addCashMovement({
+      type: "income",
+      category: "venta_producto",
+      description: "Venta de productos",
+      amount: total,
+      paymentMethod: "cash",
+      relatedTable: "sales",
+      relatedId: transactionId,
+      occurredAt: createdAt,
+    });
+    addMovement("venta", `Venta de historial: ${quantity} x ${product.name}`, total);
+  }
+
+  state.saleCart = [];
+  state.pendingSale = null;
+  state.saleNewPanelOpen = false;
+  state.toast = `${count} ventas de historial registradas.`;
+  window.history.replaceState({}, "", window.location.pathname);
 }
 
 function normalizeProductKey(value = "") {
@@ -276,11 +470,26 @@ function isUuid(value = "") {
 }
 
 function loginUsers() {
-  if (state.users?.length) return state.users;
-  return DEFAULT_SYSTEM_USERS.map((user, index) => ({
+  const fallbackUsers = DEFAULT_SYSTEM_USERS.map((user, index) => ({
     ...user,
     id: `fallback-user-${index}`,
   }));
+  if (!state.users?.length) return fallbackUsers;
+
+  const merged = [...state.users];
+  for (const fallback of fallbackUsers) {
+    const index = merged.findIndex((user) => normalizeMemberName(user.name) === normalizeMemberName(fallback.name));
+    if (index >= 0) {
+      merged[index] = {
+        ...fallback,
+        ...merged[index],
+        password: merged[index].password || fallback.password || "",
+      };
+    } else {
+      merged.push(fallback);
+    }
+  }
+  return merged;
 }
 
 function roleLabel(role = activeUser().role) {
@@ -328,13 +537,6 @@ function saveState() {
     currentUserId: state.currentUserId,
     sessionActive: state.sessionActive,
     user: state.user,
-    users: state.users,
-    cashRegister: state.cashRegister,
-    products: state.products,
-    sales: state.sales,
-    members: state.members,
-    movements: state.movements,
-    cashMovements: state.cashMovements,
     salePaymentMethod: state.salePaymentMethod,
     saleNewPanelOpen: state.saleNewPanelOpen,
     historyMonth: state.historyMonth,
@@ -342,6 +544,7 @@ function saveState() {
   };
   try {
     localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionState));
+    saveLocalState();
   } catch (error) {
     console.warn("No se pudo guardar la cache de sesion.", error);
   }
@@ -486,9 +689,64 @@ async function fetchProfiles() {
 }
 
 async function fetchCurrentCashRegister() {
-  const openRegisters = await supabaseSelect("cash_registers", "select=*&status=eq.open&order=opened_at.desc&limit=1", { optional: true });
-  if (openRegisters?.[0]) return openRegisters;
-  return supabaseSelect("cash_registers", "select=*&order=opened_at.desc&limit=1", { optional: true });
+  const cashColumns = "id,status,opened_at,closed_at,initial_amount,cash_total,transfer_total,expense_total,counted_amount,difference,notes";
+  const openByStatus = await supabaseSelect(
+    "cash_registers",
+    `select=${cashColumns}&status=eq.open&order=opened_at.desc&limit=1`,
+    { optional: true },
+  );
+  if (openByStatus?.[0]) return openByStatus;
+
+  const openByCloseState = await supabaseSelect(
+    "cash_registers",
+    `select=${cashColumns}&closed_at=is.null&order=opened_at.desc&limit=1`,
+    { optional: true },
+  );
+  if (openByCloseState?.[0]) return openByCloseState;
+
+  const recentRegisters = await supabaseSelect(
+    "cash_registers",
+    `select=${cashColumns}&order=opened_at.desc&limit=25`,
+    { optional: true },
+  );
+  const openRegister = (recentRegisters || []).find((cash) => cashRegisterLooksOpen(cash));
+  if (openRegister) return [openRegister];
+  return recentRegisters?.length ? [recentRegisters[0]] : [];
+}
+
+function isOpenCashDuplicateError(error) {
+  const message = String(error?.message || error || "").toLowerCase();
+  return message.includes("one_open_cash_register")
+    || message.includes("duplicate key value")
+    || message.includes("cash_registers_status_key")
+    || (message.includes("23505") && message.includes("cash"));
+}
+
+function isOpenCashStatus(status) {
+  const normalized = String(status || "").trim().toLowerCase();
+  return normalized === "open" || normalized === "abierta";
+}
+
+function cashRegisterLooksOpen(cash) {
+  if (!cash) return false;
+  if (isOpenCashStatus(cash.status)) return true;
+  if (cash.closed_at === null) return true;
+  if (typeof cash.closed_at === "undefined" && !["closed", "cerrada", "reviewed"].includes(String(cash.status || "").trim().toLowerCase())) return true;
+  return false;
+}
+
+async function syncExistingOpenCashRegister(message = "Caja abierta sincronizada desde Supabase.") {
+  try {
+    const existingOpen = await fetchCurrentCashRegister();
+    if (!existingOpen?.[0]) return false;
+    applyRemoteCashRegister(existingOpen[0]);
+    state.toast = message;
+    await hydrateFromSupabase();
+    dismissToastAfterDelay();
+    return true;
+  } catch (error) {
+    return false;
+  }
 }
 
 async function dbEnsureCategory(name) {
@@ -520,7 +778,29 @@ async function dbUpsertProduct(product) {
     created_by: userId || null,
     updated_at: new Date().toISOString(),
   };
-  const savedProduct = await supabaseUpsert("products", productPayload, "id");
+  const minimalProductPayload = {
+    id: productId,
+    name: product.name,
+    sku: product.sku || null,
+    category_id: categoryId,
+    sale_price: product.salePrice,
+    purchase_cost: product.purchaseCost,
+    status: dbProductStatus(product.status, product.quantity),
+    supplier_name: product.supplier || null,
+    created_by: userId || null,
+    updated_at: new Date().toISOString(),
+  };
+
+  let savedProduct;
+  try {
+    savedProduct = await supabaseUpsert("products", productPayload, "id");
+  } catch (error) {
+    const message = String(error?.message || error || "");
+    const canRetry = /column|does not exist|could not find/i.test(message);
+    if (!canRetry) throw error;
+    savedProduct = await supabaseUpsert("products", minimalProductPayload, "id");
+  }
+
   const savedProductId = savedProduct?.[0]?.id || productId;
   await supabaseUpsert("inventory", {
     product_id: savedProductId,
@@ -568,17 +848,32 @@ async function dbRecordInventoryMovement(product, amount, previousQuantity, reas
 
 async function dbOpenCashRegister(cash) {
   const userId = await dbEnsureProfile();
-  const saved = await supabaseInsert("cash_registers", {
-    opened_by: userId,
-    opened_at: cash.openedAt,
-    initial_amount: cash.initialAmount,
-    cash_total: cash.cashTotal,
-    transfer_total: cash.transferTotal,
-    expense_total: cash.expenses,
-    status: "open",
-    notes: cash.notes || null,
-  });
-  return saved?.[0]?.id || cash.id;
+  const currentOpen = await fetchCurrentCashRegister();
+  if (cashRegisterLooksOpen(currentOpen?.[0])) {
+    return currentOpen[0].id;
+  }
+  try {
+    const saved = await supabaseInsert("cash_registers", {
+      opened_by: userId,
+      opened_at: cash.openedAt,
+      initial_amount: cash.initialAmount,
+      cash_total: cash.cashTotal,
+      transfer_total: cash.transferTotal,
+      expense_total: cash.expenses,
+      status: "open",
+      notes: cash.notes || null,
+    });
+    return saved?.[0]?.id || cash.id;
+  } catch (error) {
+    if (isOpenCashDuplicateError(error)) {
+      const existingOpen = await fetchCurrentCashRegister();
+      if (existingOpen?.[0]?.id) {
+        applyRemoteCashRegister(existingOpen[0]);
+        return existingOpen[0].id;
+      }
+    }
+    throw error;
+  }
 }
 
 async function dbUpdateCashRegister(cash) {
@@ -696,7 +991,7 @@ async function dbUpsertMember(member, { registerIncome = false, renewal = false 
 }
 
 async function dbRegisterMembershipIncome(member, renewal = false) {
-  ensureMembershipCashRegister();
+  await ensureMembershipCashRegister();
   if (!state.cashRegister.id) state.cashRegister.id = await dbOpenCashRegister(state.cashRegister);
   state.cashRegister.cashTotal += MEMBERSHIP_PRICE;
   await dbUpdateCashRegister(state.cashRegister);
@@ -763,10 +1058,7 @@ function localPaymentMethod(method) {
 
 async function hydrateFromSupabase() {
   if (!supabaseConfigured()) {
-    state.booting = false;
-    state.supabase.status = "error";
-    state.supabase.message = "Faltan SUPABASE_URL y SUPABASE_ANON_KEY en Vercel.";
-    render();
+    hydrateLocalState();
     return;
   }
 
@@ -786,7 +1078,7 @@ async function hydrateFromSupabase() {
     ] = await Promise.all([
       fetchProfiles(),
       supabaseSelect("categories", "select=id,name,is_active&order=name.asc", { optional: true }),
-      supabaseSelect("products", "select=id,name,sku,category_id,sale_price,purchase_cost,purchase_cost_total,status,supplier_name,image_url,updated_at&order=name.asc", { optional: true }),
+      fetchProductsFromSupabase(),
       supabaseSelect("inventory", "select=product_id,current_quantity,min_quantity,ideal_quantity,inventory_date,week_start,week_end,updated_at", { optional: true }),
       fetchCurrentCashRegister(),
       supabaseSelect("sales", "select=*&order=created_at.desc&limit=1000", { optional: true }),
@@ -801,10 +1093,27 @@ async function hydrateFromSupabase() {
     applyRemoteProducts(categories || [], products || [], inventory || []);
     applyRemoteCashRegister((cashRegisters || [])[0] || null);
     applyRemoteSales(sales || [], saleItems || []);
-    applyRemoteCashMovements(cashMovements || []);
-    applyRemoteInventoryMovements(inventoryMovements || []);
+    applyRemoteCashMovements(cashMovements || [], profiles || []);
+    applyRemoteInventoryMovements(inventoryMovements || [], profiles || []);
     applyRemoteMemberships(clients || [], memberships || []);
 
+    if (!inventoryBootstrapAttempted && (!products || products.length === 0)) {
+      inventoryBootstrapAttempted = true;
+      const seeded = await seedBaseInventoryIfNeeded();
+      if (seeded) {
+        await hydrateFromSupabase();
+        return;
+      }
+      ensureLocalInventorySeed();
+      fallbackToLocal("Supabase no devolvió inventario base. Usando el inventario local de respaldo.");
+      state.booting = false;
+      saveState();
+      render();
+      return;
+    }
+
+    supabaseRuntimeFallback = false;
+    persistRuntimeMode("remote");
     state.booting = false;
     state.supabase.status = "connected";
     state.supabase.message = "Datos cargados desde Supabase.";
@@ -812,12 +1121,46 @@ async function hydrateFromSupabase() {
     saveState();
     render();
   } catch (error) {
-    state.booting = false;
-    state.supabase.status = "error";
-    state.supabase.message = `No se pudo cargar Supabase: ${String(error.message || error).slice(0, 120)}`;
-    state.supabase.checkedAt = new Date().toISOString();
+    hydrateLocalState(`No se pudo cargar Supabase: ${String(error.message || error).slice(0, 120)}. Operando en local por ahora.`);
+  }
+}
+
+async function fetchProductsFromSupabase() {
+  const extendedSelect = "select=id,name,sku,category_id,sale_price,purchase_cost,purchase_cost_total,status,supplier_name,image_url,updated_at&order=name.asc";
+  const minimalSelect = "select=id,name,sku,category_id,sale_price,purchase_cost,status,supplier_name,updated_at&order=name.asc";
+
+  try {
+    return await supabaseSelect("products", extendedSelect, { optional: true });
+  } catch (error) {
+    const message = String(error?.message || error || "");
+    const canRetry = /column|does not exist|could not find/i.test(message);
+    if (!canRetry) throw error;
+    return await supabaseSelect("products", minimalSelect, { optional: true });
+  }
+}
+
+async function seedBaseInventoryIfNeeded() {
+  if (!supabaseConfigured()) return false;
+  if (state.products.length) return false;
+
+  try {
+    for (const seedProduct of DEFAULT_INVENTORY_SEED) {
+      await dbUpsertProduct(withInventoryWeek({
+        ...seedProduct,
+        status: "activo",
+      }));
+    }
+    state.toast = "Inventario base sincronizado desde Supabase.";
+    saveState();
+    return true;
+  } catch (error) {
+    console.warn("No se pudo sembrar el inventario base.", error);
+    inventoryBootstrapAttempted = false;
+    ensureLocalInventorySeed();
+    fallbackToLocal("No se pudo sembrar el inventario base en Supabase. Se usó el inventario local de respaldo.");
     saveState();
     render();
+    return false;
   }
 }
 
@@ -858,23 +1201,28 @@ function applyRemoteProducts(categories, products, inventory) {
   if (!products.length && state.products?.length) return;
   const categoriesById = new Map(categories.map((category) => [category.id, category.name]));
   const inventoryByProduct = new Map(inventory.map((item) => [item.product_id, item]));
+  const localSeedBySku = new Map(DEFAULT_INVENTORY_SEED.map((item) => [(item.sku || "").toLowerCase(), item]));
+  const localSeedByName = new Map(DEFAULT_INVENTORY_SEED.map((item) => [normalizeMemberName(item.name || ""), item]));
   state.dbCategories = categories;
   state.products = products.map((product) => {
     const stock = inventoryByProduct.get(product.id) || {};
+    const fallbackSeed = localSeedBySku.get((product.sku || "").toLowerCase()) || localSeedByName.get(normalizeMemberName(product.name || ""));
+    const purchaseCost = Number(product.purchase_cost || fallbackSeed?.purchaseCost || 0);
+    const quantity = Number(stock.current_quantity || 0);
     return withInventoryWeek({
       id: product.id,
       name: product.name,
       sku: product.sku || "",
       category: categoriesById.get(product.category_id) || "Inventario",
       salePrice: Number(product.sale_price || 0),
-      purchaseCost: Number(product.purchase_cost || 0),
-      purchaseCostTotal: Number(product.purchase_cost_total || 0),
-      quantity: Number(stock.current_quantity || 0),
+      purchaseCost,
+      purchaseCostTotal: Number(product.purchase_cost_total || fallbackSeed?.purchaseCostTotal || purchaseCost * quantity || 0),
+      quantity,
       minQuantity: Number(stock.min_quantity || 0),
       idealQuantity: Number(stock.ideal_quantity || 0),
       supplier: product.supplier_name || "",
       status: localProductStatus(product.status),
-      imageUrl: product.image_url || "",
+      imageUrl: product.image_url || fallbackSeed?.imageUrl || "",
       inventoryDate: stock.inventory_date || getInventoryWeek().inventoryDate,
       weekStart: stock.week_start || getInventoryWeek().weekStart,
       weekEnd: stock.week_end || getInventoryWeek().weekEnd,
@@ -927,8 +1275,9 @@ function applyRemoteSales(sales, saleItems) {
     .filter(Boolean);
 }
 
-function applyRemoteCashMovements(cashMovements) {
+function applyRemoteCashMovements(cashMovements, profiles = []) {
   if (!cashMovements.length && state.cashMovements?.length) return;
+  const profilesById = new Map(profiles.map((profile) => [profile.id, profile]));
   state.cashMovements = cashMovements.map((movement) => ({
     id: movement.id,
     type: movement.type || (movement.movement_type === "expense" ? "expense" : "income"),
@@ -941,6 +1290,7 @@ function applyRemoteCashMovements(cashMovements) {
     isInitialImport: Boolean(movement.is_initial_import),
     occurredAt: movement.occurred_at || movement.created_at,
     createdAt: movement.created_at,
+    userName: profilesById.get(movement.user_id)?.full_name || movement.user_name || "Sistema",
   }));
 }
 
@@ -950,8 +1300,9 @@ function dbMovementCategory(movement) {
   return "otro_ingreso";
 }
 
-function applyRemoteInventoryMovements(inventoryMovements) {
+function applyRemoteInventoryMovements(inventoryMovements, profiles = []) {
   const productById = new Map(state.products.map((product) => [product.id, product]));
+  const profilesById = new Map(profiles.map((profile) => [profile.id, profile]));
   const inventoryHistory = inventoryMovements.map((movement) => {
     const product = productById.get(movement.product_id);
     return {
@@ -959,7 +1310,7 @@ function applyRemoteInventoryMovements(inventoryMovements) {
       type: "inventario",
       description: movement.reason || `Inventario: ${product?.name || "Producto"} ${movement.quantity_change > 0 ? "+" : ""}${movement.quantity_change}`,
       amount: 0,
-      userName: "Sistema",
+      userName: profilesById.get(movement.user_id)?.full_name || movement.user_name || "Sistema",
       createdAt: movement.created_at,
     };
   });
@@ -1134,7 +1485,15 @@ function cashExpected() {
 }
 
 function supabaseConfigured() {
-  return Boolean(state.supabase?.url && state.supabase?.anonKey);
+  return Boolean(DEFAULT_SUPABASE_URL && DEFAULT_SUPABASE_ANON_KEY && !supabaseRuntimeFallback);
+}
+
+function fallbackToLocal(message) {
+  supabaseRuntimeFallback = true;
+  persistRuntimeMode("local");
+  state.supabase.status = "local";
+  state.supabase.message = message;
+  state.supabase.checkedAt = new Date().toISOString();
 }
 
 function icon(name) {
@@ -1312,17 +1671,18 @@ function render() {
 }
 
 function renderLoadingScreen() {
+  const localMode = !supabaseConfigured();
   return `
     <main class="login-screen">
       <section class="login-card">
         <div class="login-brand">
           <strong>BODY FI<span>T</span></strong>
-          <p>Conectando con Supabase</p>
+          <p>${localMode ? "Iniciando modo local" : "Conectando con Supabase"}</p>
         </div>
         <div class="empty-state">
           ${icon("connection")}
-          <strong>Cargando datos reales</strong>
-          <span>La información viene desde la base de datos.</span>
+          <strong>${localMode ? "Cargando datos locales" : "Cargando datos reales"}</strong>
+          <span>${localMode ? "La informacion se guarda en este navegador." : "La informacion viene desde la base de datos."}</span>
         </div>
       </section>
     </main>
@@ -1440,12 +1800,14 @@ function normalizeActiveTab() {
 
 function connectionLabel() {
   if (state.supabase?.status === "connected") return "Supabase conectado";
+  if (state.supabase?.status === "local") return "Modo local";
   if (state.supabase?.status === "error") return "Supabase pendiente";
   return "Modo local";
 }
 
 function connectionShortLabel() {
   if (state.supabase?.status === "connected") return "Conectado";
+  if (state.supabase?.status === "local") return "Local";
   if (state.supabase?.status === "error") return "Pendiente";
   if (supabaseConfigured()) return "Conectado";
   return "Local";
@@ -1454,6 +1816,7 @@ function connectionShortLabel() {
 function renderMonitor() {
   const metrics = getMetrics();
   const cash = state.cashRegister;
+  const membershipSummary = getMembershipSummaryForReports();
   const critical = state.products.filter((product) => isActiveProduct(product) && product.quantity <= product.minQuantity);
   const shownCritical = critical.slice(0, 2).map((product) => {
     const status = getProductStatus(product);
@@ -1472,58 +1835,394 @@ function renderMonitor() {
   const cashHelper = cashOpen ? `Desde ${formatDate(cash.openedAt)}` : "Abre caja para vender";
   const cashAction = hasPermission("cash-view")
     ? cashOpen
-      ? `<button class="metric-action" type="button" data-tab="pos">Ver en ventas</button>`
-      : `<button class="metric-action" type="button" data-tab="pos">${hasPermission("cash-open") ? "Abrir caja" : "Ver caja"}</button>`
+      ? `<button class="home-kpi-action button button-ghost" type="button" data-tab="pos">Ver en ventas</button>`
+      : `<button class="home-kpi-action button button-ghost" type="button" data-tab="pos">${hasPermission("cash-open") ? "Abrir caja" : "Ver caja"}</button>`
     : "";
-  const recentMovements = [...state.movements].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 6);
+  const todayRange = getReportPeriodRange("day", toDateKey(new Date()));
+  const weekRange = getRollingHomeRevenueRange(7);
+  const previousWeekRange = getPreviousRollingHomeRevenueRange(weekRange);
+  const todayIncomeMovements = cashMovementsInRange(todayRange.start, todayRange.end);
+  const weekMovements = cashMovementsInRange(weekRange.start, weekRange.end);
+  const previousWeekMovements = cashMovementsInRange(previousWeekRange.start, previousWeekRange.end);
+  const weekRevenueData = buildHomeRevenueChartData(weekMovements, weekRange);
+  const weeklyIncome = sumReportMovements(weekMovements);
+  const previousWeeklyIncome = sumReportMovements(previousWeekMovements);
+  const weeklyChange = calculateReportChange(weeklyIncome, previousWeeklyIncome);
+  const expiringMemberships = getHomeExpiringMemberships(4);
+  const paymentMethods = groupReportByPaymentMethod(weekMovements);
+  const bestDay = getHomeBestDayInsight(weekMovements);
+  const bestHour = getHomeBestHourInsight(weekMovements);
+  const topPayment = paymentMethods[0] || null;
+  const topPaymentPercent = topPayment && weeklyIncome ? Math.round((topPayment.value / weeklyIncome) * 100) : 0;
+  const recentMovements = [...state.movements].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 5);
 
   return `
-    <div class="dashboard-heading">
-      <h1>INICIO</h1>
-      <p>Resumen general del sistema</p>
+    <div class="dashboard-home">
+      <div class="dashboard-content">
+        <div class="dashboard-heading">
+          <h1>INICIO</h1>
+          <p>Resumen general del sistema</p>
+        </div>
+
+        <section class="home-kpi-grid">
+          ${renderHomeKpiCard({
+            title: "Ventas del día",
+            value: formatCurrency(metrics.totalSales),
+            helper: `${metrics.soldItems} productos vendidos`,
+            iconName: "profit",
+            tone: "mint",
+            accent: "green",
+            progress: 0,
+            footer: `<div class="home-kpi-footer-row"><span>0% vs ayer</span><i class="home-kpi-mini-bar"><b style="width:0%"></b></i></div>`,
+          })}
+          ${renderHomeKpiCard({
+            title: "Ganancia estimada",
+            value: formatCurrency(metrics.totalProfit),
+            helper: "Según costo registrado",
+            iconName: "sales",
+            tone: "blue",
+            accent: "blue",
+            progress: 0,
+            footer: `<div class="home-kpi-footer-row"><span>0% vs ayer</span><i class="home-kpi-mini-bar"><b style="width:0%"></b></i></div>`,
+          })}
+          ${renderHomeKpiCard({
+            title: "Caja actual",
+            value: cashValue,
+            helper: cashHelper,
+            iconName: "cash",
+            tone: cashOpen ? "purple" : "closed",
+            accent: "purple",
+            footer: cashAction,
+            statusTone: cashOpen ? "open" : "closed",
+            progress: cashOpen ? Math.min(100, Math.max(6, Math.round((cashExpected() / Math.max(1, cashExpected())) * 100))) : 0,
+          })}
+          ${renderHomeKpiCard({
+            title: "Inventario crítico",
+            value: String(metrics.criticalProducts),
+            helper: "Productos bajos o agotados",
+            iconName: "alert",
+            tone: "orange",
+            accent: "orange",
+            footer: `<div class="home-kpi-footer-row home-kpi-footer-action"><button class="home-kpi-link" type="button" data-tab="stock-alerts">Ver alertas →</button><i class="home-kpi-mini-bar orange"><b style="width:${Math.min(100, metrics.criticalProducts * 18)}%"></b></i></div>`,
+            progress: Math.min(100, metrics.criticalProducts * 18),
+          })}
+        </section>
+
+        <section class="dashboard-grid">
+          <div class="dashboard-left-stack">
+            ${renderHomeAlertsCard(shownCritical, metrics.criticalProducts)}
+            ${renderSmartSummary(metrics, shownCritical, cash)}
+          </div>
+          ${renderHomeMovementsCard(recentMovements)}
+        </section>
+      </div>
     </div>
-    <section class="metrics dashboard-metrics">
-      ${renderMetric("Ventas del dia", formatCurrency(metrics.totalSales), `${metrics.soldItems} productos vendidos`, "profit", "mint", `<div class="progress muted"><span style="width: 0%"></span></div><small>0% vs ayer</small>`)}
-      ${renderMetric("Ganancia estimada", formatCurrency(metrics.totalProfit), "Segun costo registrado", "sales", "blue", `<div class="progress muted"><span style="width: 0%"></span></div><small>0% vs ayer</small>`)}
-      ${renderMetric("Caja actual", cashValue, cashHelper, "cash", "purple", cashAction, cashOpen ? "open" : "closed")}
-      ${renderMetric("Inventario critico", String(metrics.criticalProducts), "Productos bajos o agotados", "alert", "orange", `<div class="progress orange"><span style="width: ${Math.min(100, metrics.criticalProducts * 18)}%"></span></div><button class="metric-link" type="button" data-tab="stock-alerts">Ver alertas →</button>`)}
-    </section>
+  `;
+}
 
-    <section class="dashboard-grid">
-      <div class="dashboard-left-stack">
-        <div class="panel alert-panel">
-          <div class="panel-header">
-            <div>
-              <h2>${icon("monitor")} Alertas activas <span class="counter-badge">${metrics.criticalProducts}</span></h2>
-              <p>Productos que necesitan revision o surtido.</p>
-            </div>
-          </div>
-          <div class="product-alerts">
-            ${shownCritical.length ? shownCritical.map(renderAlertProductRow).join("") : renderEmptyState("Inventario en orden", "No hay productos en nivel critico.")}
-          </div>
-          <button class="section-link" type="button" data-tab="stock-alerts">Ver todas las alertas →</button>
+function getRollingHomeRevenueRange(days = 7) {
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+  const start = new Date(end);
+  start.setDate(start.getDate() - (days - 1));
+  start.setHours(0, 0, 0, 0);
+  return { start, end };
+}
+
+function getPreviousRollingHomeRevenueRange(range) {
+  const start = new Date(range.start);
+  const end = new Date(range.end);
+  const days = Math.max(1, Math.round((end - start) / 86400000) + 1);
+  const previousEnd = new Date(start);
+  previousEnd.setDate(previousEnd.getDate() - 1);
+  previousEnd.setHours(23, 59, 59, 999);
+  const previousStart = new Date(previousEnd);
+  previousStart.setDate(previousStart.getDate() - days + 1);
+  previousStart.setHours(0, 0, 0, 0);
+  return { start: previousStart, end: previousEnd };
+}
+
+function buildHomeRevenueChartData(movements, range) {
+  const totalDays = Math.max(1, Math.round((range.end - range.start) / 86400000) + 1);
+  const monthLabel = new Intl.DateTimeFormat("es-CO", { month: "short" });
+  const labels = Array.from({ length: totalDays }, (_, index) => {
+    const date = new Date(range.start);
+    date.setDate(date.getDate() + index);
+    if (index === totalDays - 1) return "Hoy";
+    const month = monthLabel.format(date).replace(".", "");
+    return `${date.getDate()} ${month}`;
+  });
+  const data = labels.map((label) => ({ label, ingresos: 0, ventas: 0, membresias: 0, movimientos: 0 }));
+
+  movements.forEach((movement) => {
+    const date = new Date(movement.occurredAt || movement.createdAt);
+    const index = Math.min(data.length - 1, Math.max(0, Math.floor((date - range.start) / 86400000)));
+    if (!data[index]) return;
+    data[index].ingresos += Number(movement.amount || 0);
+    data[index].movimientos += 1;
+    if (movement.category === "venta_producto") data[index].ventas += Number(movement.amount || 0);
+    if (["membresia_nueva", "renovacion_membresia"].includes(movement.category)) data[index].membresias += Number(movement.amount || 0);
+  });
+
+  return data;
+}
+
+function getHomeExpiringMemberships(limit = 4) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const horizon = new Date(today);
+  horizon.setDate(horizon.getDate() + 7);
+
+  return state.members
+    .map((member) => {
+      const status = getMembershipStatus(member);
+      return { member, status };
+    })
+    .filter(({ status }) => status.daysLeft >= 0 && status.daysLeft <= 7)
+    .sort((a, b) => a.status.daysLeft - b.status.daysLeft || new Date(`${a.status.expiresAt}T12:00:00`) - new Date(`${b.status.expiresAt}T12:00:00`))
+    .slice(0, limit);
+}
+
+function getHomeBestDayInsight(movements) {
+  if (!movements.length) return { label: "Sin datos", value: 0 };
+  const grouped = new Map();
+  movements.forEach((movement) => {
+    const date = new Date(movement.occurredAt || movement.createdAt);
+    const label = new Intl.DateTimeFormat("es-CO", { weekday: "long" }).format(date);
+    grouped.set(label, (grouped.get(label) || 0) + Number(movement.amount || 0));
+  });
+  const best = [...grouped.entries()].sort((a, b) => b[1] - a[1])[0];
+  if (!best) return { label: "Sin datos", value: 0 };
+  const label = best[0].replace(/^./, (char) => char.toUpperCase());
+  return { label, value: best[1] };
+}
+
+function getHomeBestHourInsight(movements) {
+  if (!movements.length) return { label: "Sin datos", value: 0 };
+  const grouped = new Map();
+  movements.forEach((movement) => {
+    const date = new Date(movement.occurredAt || movement.createdAt);
+    const label = `${String(date.getHours()).padStart(2, "0")}:00`;
+    grouped.set(label, (grouped.get(label) || 0) + Number(movement.amount || 0));
+  });
+  const best = [...grouped.entries()].sort((a, b) => b[1] - a[1])[0];
+  if (!best) return { label: "Sin datos", value: 0 };
+  return { label: best[0], value: best[1] };
+}
+
+function renderHomeKpiCard({ title, value, helper, iconName, tone = "blue", accent = "blue", footer = "", statusTone = "" }) {
+  return `
+    <article class="home-kpi-card ${accent}">
+      <div class="home-kpi-head">
+        <div class="home-kpi-icon ${tone}">${icon(iconName)}</div>
+        <div class="home-kpi-title-wrap">
+          <span>${title}${statusTone ? `<i class="state-dot ${statusTone}" aria-hidden="true"></i>` : ""}</span>
         </div>
-
-        ${renderSmartSummary(metrics, critical, cash)}
       </div>
+      <strong>${value}</strong>
+      <small>${helper}</small>
+      ${footer ? `<div class="home-kpi-footer">${footer}</div>` : ""}
+    </article>
+  `;
+}
 
-      <div class="panel movement-panel">
-        <div class="panel-header">
-          <div>
-            <h2>${icon("monitor")} Movimientos recientes</h2>
-            <p>Ventas, caja e inventario.</p>
-          </div>
-          ${hasPermission("history") ? `<button class="section-link movement-view-all" type="button" data-tab="history">Ver todos →</button>` : ""}
-        </div>
-        <div class="recent-movement-list">
-          ${
-            recentMovements.length
-              ? recentMovements.map(renderRecentMovementCard).join("")
-              : `<div class="empty">Cuando vendas o actualices inventario aparecera aqui.</div>`
-          }
+function renderHomeStatusBanner(metrics, cash, membershipSummary, todayIncomeMovements) {
+  const cashOpen = cash?.status === "abierta";
+  const todayIncome = todayIncomeMovements.reduce((sum, movement) => sum + Number(movement.amount || 0), 0);
+  const userName = activeUser()?.name || "Super Admin";
+  const greeting = activeUser().role === "super-admin" ? "Super Admin" : userName;
+  const stats = [
+    { iconName: "cart", value: String(metrics.saleCount || 0), label: "Ventas realizadas" },
+    { iconName: "user", value: String(membershipSummary.active || 0), label: "Membresías activas" },
+    { iconName: "cash", value: formatCurrency(todayIncome), label: "Ingresos del día" },
+    { iconName: "alert", value: String(metrics.criticalProducts || 0), label: "Alertas críticas" },
+  ];
+
+  return `
+    <section class="home-status-banner">
+      <div class="home-status-lead">
+        <div class="home-status-icon">${icon("sun")}</div>
+        <div class="home-status-copy">
+          <strong>Estado del día</strong>
+          <h2>¡Buen día, ${greeting}! 💪</h2>
+          <p>Aquí tienes un resumen de la actividad de hoy.</p>
         </div>
       </div>
+      <div class="home-status-stats">
+        ${stats
+          .map(
+            (stat, index) => `
+              <div class="home-status-stat ${index === 0 ? "first" : ""}">
+                <span class="home-status-stat-icon">${icon(stat.iconName)}</span>
+                <div>
+                  <strong>${stat.value}</strong>
+                  <small>${stat.label}</small>
+                </div>
+              </div>
+            `,
+          )
+          .join("")}
+      </div>
     </section>
+  `;
+}
+
+function renderHomeRevenueCard(data, total, previousTotal, change) {
+  const positive = change >= 0;
+  const changeLabel = `${positive ? "+" : ""}${change.toFixed(1)}% vs periodo anterior`;
+  const changeTone = positive ? "positive" : "negative";
+
+  return `
+    <section class="panel home-revenue-panel">
+      <div class="home-section-head">
+        <div>
+          <h2>${icon("sales")} Ingresos últimos 7 días</h2>
+          <p>La evolución reciente de ingresos del gimnasio.</p>
+        </div>
+        <span class="home-range-chip">Últimos 7 días ${icon("history")}</span>
+      </div>
+      <div class="home-revenue-meta">
+        <span>Total del periodo: <strong>${formatCurrency(total)}</strong></span>
+        <small class="${changeTone}">${changeLabel}</small>
+      </div>
+      ${data.some((item) => item.ingresos > 0) ? renderIncomeLineChart(data) : renderEmptyState("Sin datos suficientes", "Cuando se registren ventas, se mostrará la evolución de ingresos.")}
+    </section>
+  `;
+}
+
+function renderHomeQuickActionsCard() {
+  const actions = [
+    { label: "Nueva venta", subtitle: "Registrar venta", iconName: "cart", tabId: "pos", permission: "sales", tone: "blue" },
+    { label: "Agregar membresía", subtitle: "Nuevo miembro", iconName: "user", tabId: "memberships", permission: "memberships", tone: "purple" },
+    { label: "Renovar membresía", subtitle: "Actualizar acceso", iconName: "renew", tabId: "memberships", permission: "memberships", tone: "green" },
+    { label: "Agregar producto", subtitle: "Inventario", iconName: "inventory", tabId: "inventory", permission: "inventory-edit", tone: "orange" },
+    { label: "Cerrar caja", subtitle: "Control diario", iconName: "cash", tabId: "cash", permission: "cash-open", tone: "red" },
+    { label: "Ver reportes", subtitle: "Analítica", iconName: "sales", tabId: "reports", permission: "reports-view", tone: "indigo" },
+  ].filter(({ permission }) => hasPermission(permission));
+
+  return `
+    <section class="panel home-actions-panel">
+      <div class="home-section-head">
+        <div>
+          <h2>${icon("connection")} Acciones rápidas</h2>
+          <p>Accesos frecuentes para operar el gimnasio más rápido.</p>
+        </div>
+      </div>
+      <div class="home-actions-grid">
+        ${actions
+          .map(
+            (action) => `
+              <button class="home-action-card interactive-card ${action.tone}" type="button" data-tab="${action.tabId}">
+                <span class="home-action-icon">${icon(action.iconName)}</span>
+                <span class="home-action-copy">
+                  <strong>${action.label}</strong>
+                  <small>${action.subtitle}</small>
+                </span>
+              </button>
+            `,
+          )
+          .join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderHomeAlertsCard(criticalProducts, criticalCount = 0) {
+  return `
+    <section class="panel home-alerts-panel">
+      <div class="home-section-head">
+        <div>
+          <h2>${icon("monitor")} Alertas activas <span class="counter-badge">${criticalCount}</span></h2>
+          <p>Productos que necesitan revisión o surtido.</p>
+        </div>
+      </div>
+      <div class="product-alerts">
+        ${criticalProducts.length ? criticalProducts.map(renderAlertProductRow).join("") : renderEmptyState("Inventario en orden", "No hay productos en nivel crítico.")}
+      </div>
+      <button class="section-link" type="button" data-tab="stock-alerts">Ver todas las alertas →</button>
+    </section>
+  `;
+}
+
+function renderHomeMovementsCard(movements) {
+  const visibleMovements = movements.slice(0, 4);
+  return `
+    <section class="panel home-movements-panel">
+      <div class="home-section-head">
+        <div>
+          <h2>${icon("history")} Movimientos recientes</h2>
+          <p>Ventas, caja e inventario.</p>
+        </div>
+        ${hasPermission("history") ? `<button class="section-link movement-view-all" type="button" data-tab="history">Ver todos →</button>` : ""}
+      </div>
+      <div class="recent-movement-list">
+        ${visibleMovements.length ? visibleMovements.map(renderRecentMovementCard).join("") : `<div class="empty">Cuando vendas o actualices inventario aparecera aqui.</div>`}
+      </div>
+    </section>
+  `;
+}
+
+function renderHomeExpiringMembershipsCard(memberships) {
+  const visibleMemberships = memberships.slice(0, 4);
+  return `
+    <section class="panel home-expiring-panel">
+      <div class="home-section-head">
+        <div>
+          <h2>${icon("calendar")} Próximas a vencer</h2>
+          <p>Membresías con renovación cercana.</p>
+        </div>
+        <button class="section-link movement-view-all" type="button" data-tab="memberships">Ver todas →</button>
+      </div>
+      <div class="home-expiring-list">
+        ${
+          visibleMemberships.length
+            ? visibleMemberships
+                .map(({ member, status }) => `
+                  <div class="home-expiring-item">
+                    <div class="home-expiring-avatar">${memberInitials(member.name)}</div>
+                    <div class="home-expiring-main">
+                      <strong>${member.name}</strong>
+                      <span>${member.plan || "Plan activo"}</span>
+                    </div>
+                    <div class="home-expiring-side">
+                      ${renderStatusBadge(status.label, status.tone === "bad" ? "bad" : "warn")}
+                      <small>${status.helper}</small>
+                    </div>
+                  </div>
+                `)
+                .join("")
+            : renderEmptyState("No hay membresías próximas a vencer", "Todo está al día.")
+        }
+      </div>
+    </section>
+  `;
+}
+
+function renderHomeInsightsCard(bestDay, bestHour, topPayment, topPaymentPercent) {
+  return `
+    <section class="panel business-insights-card">
+      <div class="business-insights-lead">
+        <strong>Insights del negocio</strong>
+        <p>Información clave para tomar mejores decisiones.</p>
+      </div>
+      ${renderHomeInsightItem("Mejor día de la semana", bestDay?.label || "Sin datos", bestDay?.value ? formatCurrency(bestDay.value) : "Sin datos", "sales", "blue")}
+      ${renderHomeInsightItem("Mejor hora del día", bestHour?.label || "Sin datos", bestHour?.value ? `${formatCurrency(bestHour.value)} en promedio` : "Sin datos", "history", "purple")}
+      ${renderHomeInsightItem("Método de pago más usado", topPayment?.label || "Sin datos", topPayment ? `${topPaymentPercent}% de las transacciones` : "Sin datos", "cash", "mint")}
+    </section>
+  `;
+}
+
+function renderHomeInsightItem(title, value, subtitle, iconName, tone = "blue") {
+  return `
+    <article class="home-insight-item ${tone}">
+      <div class="home-insight-icon">${icon(iconName)}</div>
+      <div class="home-insight-copy">
+        <span>${title}</span>
+        <strong>${value}</strong>
+        <small>${subtitle}</small>
+      </div>
+      <span class="home-insight-arrow">›</span>
+    </article>
   `;
 }
 
@@ -1749,6 +2448,10 @@ function renderMembershipStat(title, value, helper, iconName, tone) {
 
 function renderMemberCard(member) {
   const status = getMembershipStatus(member);
+  const isSuperAdmin = activeUser().role === "super-admin";
+  const canRenewNow = canRenewMembership(member);
+  const canEditNow = canEditMembership(member);
+  const canManageMemberActions = activeUser().role !== "operator";
   const contact = [
     member.phone || "Sin telefono",
     member.documentId ? `ID ${member.documentId}` : "Sin documento",
@@ -1785,9 +2488,15 @@ function renderMemberCard(member) {
           <small>${status.helper}</small>
         </div>
         <div class="member-actions">
-          <button class="member-action edit" type="button" data-edit-member="${member.id}">${icon("edit")}<span>Editar</span></button>
-          <button class="member-action renew" type="button" data-renew-member="${member.id}">${icon("renew")}<span>Renovar</span></button>
-          <button class="member-action delete" type="button" data-delete-member="${member.id}">${icon("trash")}<span>Eliminar</span></button>
+          <button class="member-action renew ${canRenewNow ? "" : "disabled"}" type="button" data-renew-member="${member.id}" ${canRenewNow ? "" : "disabled title=\"Solo se puede renovar con 3 dias restantes o menos, salvo super admin.\""}>${icon("renew")}<span>Renovar</span></button>
+          ${
+            canManageMemberActions
+              ? `
+                <button class="member-action edit ${canEditNow ? "" : "disabled"}" type="button" data-edit-member="${member.id}" ${canEditNow ? "" : "disabled title=\"Solo se puede editar con 3 dias restantes o menos, salvo super admin.\""}>${icon("edit")}<span>Editar</span></button>
+                <button class="member-action delete" type="button" data-delete-member="${member.id}">${icon("trash")}<span>Eliminar</span></button>
+              `
+              : ""
+          }
         </div>
       </div>
     </article>
@@ -1811,6 +2520,16 @@ function getMembershipExpiration(member) {
   if (member.expiresAt) return member.expiresAt;
   if (member.endDate) return member.endDate;
   return addMonths(member.acquiredAt, membershipPlanMonths(member.plan));
+}
+
+function canEditMembership(member) {
+  const status = getMembershipStatus(member);
+  return activeUser().role === "super-admin" || status.daysLeft <= 3;
+}
+
+function canRenewMembership(member) {
+  const status = getMembershipStatus(member);
+  return activeUser().role === "super-admin" || status.daysLeft <= 3;
 }
 
 function membershipPlanMonths(plan = "Mensual") {
@@ -2354,6 +3073,9 @@ function renderMembershipModal() {
   if (!member) return "";
 
   if (state.memberModalMode === "edit") {
+    if (activeUser().role === "operator") {
+      return "";
+    }
     return `
       <div class="modal-backdrop" role="presentation">
         <section class="modal-card membership-modal-card" role="dialog" aria-modal="true" aria-labelledby="member-modal-title">
@@ -2405,6 +3127,9 @@ function renderMembershipModal() {
   }
 
   if (state.memberModalMode === "delete") {
+    if (activeUser().role === "operator") {
+      return "";
+    }
     return `
       <div class="modal-backdrop" role="presentation">
         <section class="modal-card membership-confirm-card" role="dialog" aria-modal="true" aria-labelledby="member-modal-title">
@@ -4158,12 +4883,89 @@ function bindPremiumSelects() {
     document.querySelectorAll(".sales-cash-popover[open]").forEach((popover) => {
       if (!popover.contains(event.target)) popover.removeAttribute("open");
     });
+    const tabMenu = document.querySelector(".tab-menu.open");
+    if (tabMenu && !tabMenu.contains(event.target)) tabMenu.classList.remove("open");
   });
-  root?.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape") return;
-    document.querySelectorAll("[data-premium-select][open]").forEach((select) => select.removeAttribute("open"));
-    document.querySelectorAll(".sales-cash-popover[open]").forEach((popover) => popover.removeAttribute("open"));
-  });
+  root?.addEventListener("keydown", handleGlobalEscape);
+}
+
+function closeOpenPremiumSelects() {
+  const openSelects = document.querySelectorAll("[data-premium-select][open]");
+  if (!openSelects.length) return false;
+  openSelects.forEach((select) => select.removeAttribute("open"));
+  return true;
+}
+
+function closeOpenSalesPopover() {
+  const openPopovers = document.querySelectorAll(".sales-cash-popover[open]");
+  if (!openPopovers.length) return false;
+  openPopovers.forEach((popover) => popover.removeAttribute("open"));
+  return true;
+}
+
+function closeOpenSalesControlPanel() {
+  const openPanels = document.querySelectorAll(".sales-cash-control-panel[open]");
+  if (!openPanels.length) return false;
+  openPanels.forEach((panel) => panel.removeAttribute("open"));
+  return true;
+}
+
+function closeOpenTabMenu() {
+  const menu = document.querySelector(".tab-menu.open");
+  if (!menu) return false;
+  menu.classList.remove("open");
+  return true;
+}
+
+function closeTransientUiOverlays() {
+  const closedPremiumSelects = closeOpenPremiumSelects();
+  const closedSalesPopover = closeOpenSalesPopover();
+  const closedSalesControlPanel = closeOpenSalesControlPanel();
+  const closedTabMenu = closeOpenTabMenu();
+
+  if (state.newProductModalOpen || state.stockProductId || state.memberModalMode || state.selectedMemberId || state.pendingSale || state.saleNewPanelOpen) {
+    state.newProductModalOpen = false;
+    state.editingProductId = "";
+    state.stockProductId = "";
+    state.memberModalMode = "";
+    state.selectedMemberId = "";
+    state.pendingSale = null;
+    state.saleNewPanelOpen = false;
+    saveState();
+    return true;
+  }
+
+  return closedPremiumSelects || closedSalesPopover || closedSalesControlPanel || closedTabMenu;
+}
+
+function goBackFromNestedView() {
+  if (state.reportsView) {
+    state.reportsView = "";
+    saveState();
+    return true;
+  }
+
+  if (state.settingsView && state.settingsView !== "home") {
+    state.settingsView = "home";
+    saveState();
+    return true;
+  }
+
+  return false;
+}
+
+function handleGlobalEscape(event) {
+  if (event.key !== "Escape") return;
+
+  const closedOverlay = closeTransientUiOverlays();
+  if (closedOverlay) {
+    render();
+    return;
+  }
+
+  if (goBackFromNestedView()) {
+    render();
+  }
 }
 
 function handleSessionAction(action) {
@@ -4220,7 +5022,15 @@ function dismissToastAfterDelay() {
 
 async function createDefaultSystemUsers() {
   if (!supabaseConfigured()) {
-    alert("Primero configura SUPABASE_URL y SUPABASE_ANON_KEY en Vercel.");
+    fallbackToLocal("Supabase no está disponible. Creando usuarios base en local.");
+    state.users = defaultLocalUsers();
+    state.currentUserId = "";
+    state.sessionActive = false;
+    state.user = { name: "Sin sesión", role: "" };
+    state.toast = "Usuarios base creados en local.";
+    saveState();
+    render();
+    dismissToastAfterDelay();
     return;
   }
 
@@ -4232,7 +5042,15 @@ async function createDefaultSystemUsers() {
     await hydrateFromSupabase();
     dismissToastAfterDelay();
   } catch (error) {
-    alert(`No pude crear los usuarios base en Supabase: ${error.message}`);
+    fallbackToLocal("Supabase no respondió al crear los usuarios base. Operando en local.");
+    state.users = defaultLocalUsers();
+    state.currentUserId = "";
+    state.sessionActive = false;
+    state.user = { name: "Sin sesión", role: "" };
+    state.toast = "Usuarios base creados en local.";
+    saveState();
+    render();
+    dismissToastAfterDelay();
   }
 }
 
@@ -4260,7 +5078,18 @@ async function addSystemUser(event) {
     await hydrateFromSupabase();
     dismissToastAfterDelay();
   } catch (error) {
-    alert(`No se pudo crear el usuario en Supabase: ${error.message}`);
+    fallbackToLocal("Supabase no respondió al crear un usuario. Operando en local.");
+    const newUser = {
+      id: crypto.randomUUID(),
+      name,
+      role: data.accountRole,
+      password,
+    };
+    state.users = [...state.users, newUser];
+    state.toast = `Usuario creado: ${name}`;
+    saveState();
+    render();
+    dismissToastAfterDelay();
   }
 }
 
@@ -4292,7 +5121,12 @@ async function updateSystemUserPassword(event) {
     await hydrateFromSupabase();
     dismissToastAfterDelay();
   } catch (error) {
-    alert(`No se pudo actualizar la contraseña: ${error.message}`);
+    fallbackToLocal("Supabase no respondió al actualizar una contraseña. Operando en local.");
+    state.users = state.users.map((item) => (item.id === user.id ? { ...item, password } : item));
+    state.toast = `Contraseña actualizada para ${user.name}.`;
+    saveState();
+    render();
+    dismissToastAfterDelay();
   }
 }
 
@@ -4307,7 +5141,12 @@ async function deleteSystemUser(userId) {
     await hydrateFromSupabase();
     dismissToastAfterDelay();
   } catch (error) {
-    alert(`No se pudo eliminar el usuario en Supabase: ${error.message}`);
+    fallbackToLocal("Supabase no respondió al eliminar un usuario. Operando en local.");
+    state.users = state.users.filter((item) => item.id !== userId);
+    state.toast = `Usuario eliminado: ${user.name}`;
+    saveState();
+    render();
+    dismissToastAfterDelay();
   }
 }
 
@@ -4355,6 +5194,18 @@ async function addMember(event) {
     updatedAt: new Date().toISOString(),
   };
 
+  if (!supabaseConfigured()) {
+    state.members.push(member);
+    await registerMembershipIncome(member, "membership");
+    state.memberModalMode = "";
+    state.selectedMemberId = "";
+    state.toast = "Membresia registrada correctamente.";
+    saveState();
+    render();
+    dismissToastAfterDelay();
+    return;
+  }
+
   try {
     await dbUpsertMember(member, { registerIncome: true });
     state.memberModalMode = "";
@@ -4363,7 +5214,15 @@ async function addMember(event) {
     await hydrateFromSupabase();
     dismissToastAfterDelay();
   } catch (error) {
-    alert(`No se pudo guardar la membresia en Supabase: ${error.message}`);
+    fallbackToLocal("Supabase no respondió al registrar una membresía. Operando en local.");
+    state.members.push(member);
+    await registerMembershipIncome(member, "membership");
+    state.memberModalMode = "";
+    state.selectedMemberId = "";
+    state.toast = "Membresia registrada correctamente.";
+    saveState();
+    render();
+    dismissToastAfterDelay();
   }
 }
 
@@ -4382,7 +5241,20 @@ function collectMemberFormData(form) {
 
 function openMemberModal(mode, memberId) {
   if (!requirePermission("memberships")) return;
-  if (!state.members.some((member) => member.id === memberId)) return;
+  const member = state.members.find((item) => item.id === memberId);
+  if (!member) return;
+  if (activeUser().role === "operator" && mode !== "renew") {
+    alert("El Operador solo puede renovar o registrar nuevas membresias.");
+    return;
+  }
+  if (mode === "edit" && !canEditMembership(member)) {
+    alert("Solo se puede editar cuando faltan 3 dias o menos para el vencimiento. El super admin puede hacerlo en cualquier momento.");
+    return;
+  }
+  if (mode === "renew" && !canRenewMembership(member)) {
+    alert("Solo se puede renovar cuando faltan 3 dias o menos para el vencimiento. El super admin puede renovarla en cualquier momento.");
+    return;
+  }
   state.memberModalMode = mode;
   state.selectedMemberId = memberId;
   saveState();
@@ -4399,9 +5271,17 @@ function closeMemberModal() {
 async function saveMemberEdit(event) {
   event.preventDefault();
   if (!requirePermission("memberships")) return;
+  if (activeUser().role === "operator") {
+    alert("El Operador no puede editar membresias.");
+    return;
+  }
   const member = state.members.find((item) => item.id === state.selectedMemberId);
   if (!member) {
     alert("No se pudo completar la accion.");
+    return;
+  }
+  if (!canEditMembership(member)) {
+    alert("Solo se puede editar cuando faltan 3 dias o menos para el vencimiento. El super admin puede hacerlo en cualquier momento.");
     return;
   }
 
@@ -4426,6 +5306,17 @@ async function saveMemberEdit(event) {
     updatedAt: new Date().toISOString(),
   };
 
+  if (!supabaseConfigured()) {
+    state.members = state.members.map((item) => (item.id === updatedMember.id ? updatedMember : item));
+    state.memberModalMode = "";
+    state.selectedMemberId = "";
+    state.toast = "Membresia actualizada correctamente.";
+    saveState();
+    render();
+    dismissToastAfterDelay();
+    return;
+  }
+
   try {
     await dbUpsertMember(updatedMember);
     state.memberModalMode = "";
@@ -4434,7 +5325,14 @@ async function saveMemberEdit(event) {
     await hydrateFromSupabase();
     dismissToastAfterDelay();
   } catch (error) {
-    alert(`No se pudo actualizar la membresia en Supabase: ${error.message}`);
+    fallbackToLocal("Supabase no respondió al actualizar una membresía. Operando en local.");
+    state.members = state.members.map((item) => (item.id === updatedMember.id ? updatedMember : item));
+    state.memberModalMode = "";
+    state.selectedMemberId = "";
+    state.toast = "Membresia actualizada correctamente.";
+    saveState();
+    render();
+    dismissToastAfterDelay();
   }
 }
 
@@ -4447,6 +5345,10 @@ async function confirmRenewMembership() {
   }
 
   const status = getMembershipStatus(member);
+  if (!canRenewMembership(member)) {
+    alert("Solo se puede renovar cuando faltan 3 dias o menos para el vencimiento. El super admin puede renovarla en cualquier momento.");
+    return;
+  }
   const newStartDate = status.daysLeft >= 0 ? status.expiresAt : toDateKey(new Date());
   member.acquiredAt = newStartDate;
   member.expiresAt = addMonths(newStartDate, membershipPlanMonths(member.plan));
@@ -4454,23 +5356,56 @@ async function confirmRenewMembership() {
   member.renewedAt = new Date().toISOString();
   member.updatedAt = new Date().toISOString();
 
+  if (!supabaseConfigured()) {
+    await registerMembershipIncome(member, "membership_renewal");
+    state.memberModalMode = "";
+    state.selectedMemberId = "";
+    state.toast = `Membresia renovada correctamente por ${activeUser().name || "Sistema"}.`;
+    saveState();
+    render();
+    dismissToastAfterDelay();
+    return;
+  }
+
   try {
     await dbUpsertMember(member, { registerIncome: true, renewal: true });
     state.memberModalMode = "";
     state.selectedMemberId = "";
-    state.toast = "Membresia renovada correctamente.";
+    state.toast = `Membresia renovada correctamente por ${activeUser().name || "Sistema"}.`;
     await hydrateFromSupabase();
     dismissToastAfterDelay();
   } catch (error) {
-    alert(`No se pudo renovar la membresia en Supabase: ${error.message}`);
+    fallbackToLocal("Supabase no respondió al renovar una membresía. Operando en local.");
+    await registerMembershipIncome(member, "membership_renewal");
+    state.memberModalMode = "";
+    state.selectedMemberId = "";
+    state.toast = `Membresia renovada correctamente por ${activeUser().name || "Sistema"}.`;
+    saveState();
+    render();
+    dismissToastAfterDelay();
   }
 }
 
 async function confirmDeleteMembership() {
   if (!requirePermission("memberships")) return;
+  if (activeUser().role === "operator") {
+    alert("El Operador no puede eliminar membresias.");
+    return;
+  }
   const member = state.members.find((item) => item.id === state.selectedMemberId);
   if (!member) {
     alert("No se pudo completar la accion.");
+    return;
+  }
+
+  if (!supabaseConfigured()) {
+    state.members = state.members.filter((item) => item.id !== member.id);
+    state.memberModalMode = "";
+    state.selectedMemberId = "";
+    state.toast = "Membresia eliminada correctamente.";
+    saveState();
+    render();
+    dismissToastAfterDelay();
     return;
   }
 
@@ -4482,17 +5417,25 @@ async function confirmDeleteMembership() {
     await hydrateFromSupabase();
     dismissToastAfterDelay();
   } catch (error) {
-    alert(`No se pudo eliminar la membresia en Supabase: ${error.message}`);
+    fallbackToLocal("Supabase no respondió al eliminar una membresía. Operando en local.");
+    state.members = state.members.filter((item) => item.id !== member.id);
+    state.memberModalMode = "";
+    state.selectedMemberId = "";
+    state.toast = "Membresia eliminada correctamente.";
+    saveState();
+    render();
+    dismissToastAfterDelay();
   }
 }
 
-function registerMembershipIncome(member, category) {
+async function registerMembershipIncome(member, category) {
   const createdAt = new Date().toISOString();
   const saleId = crypto.randomUUID();
   const transactionId = crypto.randomUUID();
   const reportCategory = category === "membership_renewal" ? "renovacion_membresia" : "membresia_nueva";
   const description = category === "membership_renewal" ? `Renovacion de membresia - ${member.name}` : `Nueva membresia - ${member.name}`;
-  ensureMembershipCashRegister();
+  const userName = activeUser().name || "Sistema";
+  await ensureMembershipCashRegister();
   state.cashRegister.cashTotal += MEMBERSHIP_PRICE;
   state.sales.push({
     id: saleId,
@@ -4519,15 +5462,40 @@ function registerMembershipIncome(member, category) {
   });
   addMovement(
     "membresia",
-    category === "membership_renewal" ? `Renovacion de membresia - ${member.name}` : `Pago de membresia - ${member.name}`,
+    `${category === "membership_renewal" ? "Renovacion de membresia" : "Pago de membresia"} - ${member.name} · Registrado por ${userName}`,
     MEMBERSHIP_PRICE,
   );
 }
 
-function ensureMembershipCashRegister() {
-  if (state.cashRegister?.status === "abierta") return;
+async function ensureMembershipCashRegister() {
+  if (state.cashRegister?.status === "abierta") return state.cashRegister;
+  if (!supabaseConfigured()) {
+    state.cashRegister = createCashRegister(0, "Caja abierta automaticamente por ingreso de membresia.");
+    addMovement("caja", "Caja abierta automaticamente por ingreso de membresia", 0);
+    saveState();
+    return state.cashRegister;
+  }
+  const openRegisters = await fetchCurrentCashRegister();
+  if (openRegisters?.[0] && localCashStatus(openRegisters[0].status) === "abierta") {
+    applyRemoteCashRegister(openRegisters[0]);
+    return state.cashRegister;
+  }
   state.cashRegister = createCashRegister(0, "Caja abierta automaticamente por ingreso de membresia.");
   addMovement("caja", "Caja abierta automaticamente por ingreso de membresia", 0);
+
+  try {
+    state.cashRegister.id = await dbOpenCashRegister(state.cashRegister);
+    return state.cashRegister;
+  } catch (error) {
+    supabaseRuntimeFallback = true;
+    state.supabase.status = "local";
+    state.supabase.message = "Supabase no pudo abrir la caja para membresias. Operando en local.";
+    state.supabase.checkedAt = new Date().toISOString();
+    state.cashRegister = createCashRegister(0, "Caja abierta automaticamente por ingreso de membresia.");
+    addMovement("caja", "Caja abierta automaticamente por ingreso de membresia", 0);
+    saveState();
+    return state.cashRegister;
+  }
 }
 
 function formatMoneyWhileTyping(input) {
@@ -4616,6 +5584,22 @@ async function addProduct(event) {
     state.toast = `Producto agregado: ${product.name}`;
   }
 
+  if (!supabaseConfigured()) {
+    if (editingProduct) {
+      state.products = state.products.map((item) => (item.id === product.id ? product : item));
+      addMovement("inventario", `Producto actualizado: ${product.name}`, product.quantity);
+    } else {
+      state.products = [...state.products, product];
+      addMovement("inventario", `Producto agregado: ${product.name}`, product.quantity);
+    }
+    state.newProductModalOpen = false;
+    state.editingProductId = "";
+    saveState();
+    render();
+    dismissToastAfterDelay();
+    return;
+  }
+
   try {
     await dbUpsertProduct(product);
     state.newProductModalOpen = false;
@@ -4623,7 +5607,20 @@ async function addProduct(event) {
     await hydrateFromSupabase();
     dismissToastAfterDelay();
   } catch (error) {
-    alert(`No se pudo guardar el producto en Supabase: ${error.message}`);
+    fallbackToLocal("Supabase no respondió al guardar un producto. Operando en local.");
+    if (editingProduct) {
+      state.products = state.products.map((item) => (item.id === product.id ? product : item));
+      addMovement("inventario", `Producto actualizado: ${product.name}`, product.quantity);
+    } else {
+      state.products = [...state.products, product];
+      addMovement("inventario", `Producto agregado: ${product.name}`, product.quantity);
+    }
+    state.newProductModalOpen = false;
+    state.editingProductId = "";
+    state.toast = editingProduct ? `Producto actualizado: ${product.name}` : `Producto agregado: ${product.name}`;
+    saveState();
+    render();
+    dismissToastAfterDelay();
   }
 }
 
@@ -4668,13 +5665,31 @@ async function deleteProduct(productId) {
   if (!product) return;
   if (!confirm(`¿Eliminar ${product.name} del inventario?`)) return;
 
+  if (!supabaseConfigured()) {
+    product.status = "inactivo";
+    product.quantity = 0;
+    addMovement("inventario", `Producto inhabilitado: ${product.name}`, 0);
+    state.toast = `Producto inhabilitado: ${product.name}`;
+    saveState();
+    render();
+    dismissToastAfterDelay();
+    return;
+  }
+
   try {
     await dbDisableProduct(product);
     state.toast = `Producto inhabilitado: ${product.name}`;
     await hydrateFromSupabase();
     dismissToastAfterDelay();
   } catch (error) {
-    alert(`No se pudo inhabilitar el producto en Supabase: ${error.message}`);
+    fallbackToLocal("Supabase no respondió al inhabilitar un producto. Operando en local.");
+    product.status = "inactivo";
+    product.quantity = 0;
+    addMovement("inventario", `Producto inhabilitado: ${product.name}`, 0);
+    state.toast = `Producto inhabilitado: ${product.name}`;
+    saveState();
+    render();
+    dismissToastAfterDelay();
   }
 }
 
@@ -4688,6 +5703,7 @@ async function importInventoryFile() {
   if (!requirePermission("inventory-edit")) return;
   const input = document.querySelector("#inventory-file");
   const file = input?.files?.[0];
+  let importedProducts = [];
 
   if (!file) {
     state.inventoryFileMessage = "Para importar, selecciona un archivo CSV, Excel o Word.";
@@ -4697,19 +5713,28 @@ async function importInventoryFile() {
   }
 
   try {
-    const products = await readInventoryFile(file);
-    if (!products.length) {
+    importedProducts = await readInventoryFile(file);
+    if (!importedProducts.length) {
       state.inventoryFileMessage = "No encontre productos validos en el archivo.";
       saveState();
       render();
       return;
     }
 
-    const result = upsertInventoryProducts(products);
-    await Promise.all(products.map((product) => dbUpsertProduct(product)));
+    const result = upsertInventoryProducts(importedProducts);
+    await Promise.all(importedProducts.map((product) => dbUpsertProduct(product)));
     state.inventoryFileMessage = `Archivo importado en Supabase: ${result.created} creados, ${result.updated} actualizados.`;
     await hydrateFromSupabase();
   } catch (error) {
+    const message = String(error?.message || error || "");
+    if (/supabase|network|fetch|failed|unauthorized|forbidden|column|does not exist|duplicate key/i.test(message)) {
+      fallbackToLocal("Supabase no respondió al importar inventario. Operando en local.");
+      const localResult = upsertInventoryProducts(importedProducts);
+      state.inventoryFileMessage = `Archivo importado en local: ${localResult.created} creados, ${localResult.updated} actualizados.`;
+      saveState();
+      render();
+      return;
+    }
     state.inventoryFileMessage = `No pude leer el archivo: ${error.message}`;
     saveState();
     render();
@@ -5168,6 +6193,16 @@ async function confirmStockSupply(event) {
   product.status = "activo";
   Object.assign(product, getInventoryWeek());
 
+  if (!supabaseConfigured()) {
+    addMovement("inventario", `Surtido: ${product.name} +${amount}`, amount);
+    state.stockProductId = "";
+    state.toast = `Surtido confirmado: ${product.name} +${amount}`;
+    saveState();
+    render();
+    dismissToastAfterDelay();
+    return;
+  }
+
   try {
     await dbRecordInventoryMovement(product, amount, previousQuantity, `Surtido: ${product.name} +${amount}`);
     state.stockProductId = "";
@@ -5175,7 +6210,13 @@ async function confirmStockSupply(event) {
     await hydrateFromSupabase();
     dismissToastAfterDelay();
   } catch (error) {
-    alert(`No se pudo registrar el surtido en Supabase: ${error.message}`);
+    fallbackToLocal("Supabase no respondió al surtido. Operando en local.");
+    addMovement("inventario", `Surtido: ${product.name} +${amount}`, amount);
+    state.stockProductId = "";
+    state.toast = `Surtido confirmado: ${product.name} +${amount}`;
+    saveState();
+    render();
+    dismissToastAfterDelay();
   }
 }
 
@@ -5189,6 +6230,32 @@ async function openCash(event) {
     return;
   }
 
+  if (!supabaseConfigured()) {
+    if (state.cashRegister?.status === "abierta") {
+      state.toast = "La caja ya esta abierta.";
+      saveState();
+      render();
+      dismissToastAfterDelay();
+      return;
+    }
+    state.cashRegister = createCashRegister(initialAmount);
+    addMovement("caja", `Caja abierta con ${formatCurrency(initialAmount)}`, initialAmount);
+    state.toast = `Caja abierta con ${formatCurrency(initialAmount)}.`;
+    saveState();
+    render();
+    dismissToastAfterDelay();
+    return;
+  }
+
+  const currentOpen = await fetchCurrentCashRegister();
+  if (cashRegisterLooksOpen(currentOpen?.[0])) {
+    applyRemoteCashRegister(currentOpen[0]);
+    state.toast = "Caja abierta sincronizada desde Supabase.";
+    await hydrateFromSupabase();
+    dismissToastAfterDelay();
+    return;
+  }
+
   const cash = createCashRegister(initialAmount);
 
   try {
@@ -5198,15 +6265,29 @@ async function openCash(event) {
     await hydrateFromSupabase();
     dismissToastAfterDelay();
   } catch (error) {
-    if (String(error.message || "").includes("one_open_cash_register") || String(error.message || "").includes("duplicate key value")) {
-      await hydrateFromSupabase();
-      if (state.cashRegister?.status === "abierta") {
-        state.toast = "Caja abierta sincronizada desde Supabase.";
-        dismissToastAfterDelay();
-        return;
+    if (isOpenCashDuplicateError(error)) {
+      const synced = await syncExistingOpenCashRegister("Caja ya estaba abierta en Supabase. Se sincronizo el estado.");
+      if (synced) return;
+      fallbackToLocal("Supabase ya tenía una caja abierta y no se pudo confirmar su estado. Operando en local.");
+      if (state.cashRegister?.status !== "abierta") {
+        state.cashRegister = createCashRegister(initialAmount);
+        addMovement("caja", `Caja abierta con ${formatCurrency(initialAmount)}`, initialAmount);
       }
+      state.toast = `Caja abierta con ${formatCurrency(initialAmount)}.`;
+      saveState();
+      render();
+      dismissToastAfterDelay();
+      return;
     }
-    alert(`No se pudo abrir la caja en Supabase: ${error.message}`);
+    fallbackToLocal("Supabase no respondió al abrir la caja. Operando en local.");
+    if (state.cashRegister?.status !== "abierta") {
+      state.cashRegister = createCashRegister(initialAmount);
+      addMovement("caja", `Caja abierta con ${formatCurrency(initialAmount)}`, initialAmount);
+    }
+    state.toast = `Caja abierta con ${formatCurrency(initialAmount)}.`;
+    saveState();
+    render();
+    dismissToastAfterDelay();
   }
 }
 
@@ -5226,13 +6307,27 @@ async function closeCash(event) {
   state.cashRegister.difference = countedAmount - cashExpected();
   state.cashRegister.notes = data.cashNotes.trim();
 
+  if (!supabaseConfigured()) {
+    addMovement("caja", `Caja cerrada. Contado: ${formatCurrency(countedAmount)}`, countedAmount);
+    state.toast = "Caja cerrada correctamente.";
+    saveState();
+    render();
+    dismissToastAfterDelay();
+    return;
+  }
+
   try {
     await dbUpdateCashRegister(state.cashRegister);
     state.toast = "Caja cerrada correctamente.";
     await hydrateFromSupabase();
     dismissToastAfterDelay();
   } catch (error) {
-    alert(`No se pudo cerrar la caja en Supabase: ${error.message}`);
+    fallbackToLocal("Supabase no respondió al cerrar la caja. Operando en local.");
+    addMovement("caja", `Caja cerrada. Contado: ${formatCurrency(countedAmount)}`, countedAmount);
+    state.toast = "Caja cerrada correctamente.";
+    saveState();
+    render();
+    dismissToastAfterDelay();
   }
 }
 
@@ -5252,13 +6347,28 @@ async function editCashOpeningAmount(event) {
   const previousAmount = state.cashRegister.initialAmount;
   state.cashRegister.initialAmount = correctedAmount;
   state.cashRegister.notes = `${state.cashRegister.notes || ""} Correccion: ${reason}`.trim();
+
+  if (!supabaseConfigured()) {
+    addMovement("caja", `Monto inicial corregido de ${formatCurrency(previousAmount)} a ${formatCurrency(correctedAmount)}`, correctedAmount - previousAmount);
+    state.toast = `Monto inicial corregido de ${formatCurrency(previousAmount)} a ${formatCurrency(correctedAmount)}.`;
+    saveState();
+    render();
+    dismissToastAfterDelay();
+    return;
+  }
+
   try {
     await dbUpdateCashRegister(state.cashRegister);
     state.toast = `Monto inicial corregido de ${formatCurrency(previousAmount)} a ${formatCurrency(correctedAmount)}.`;
     await hydrateFromSupabase();
     dismissToastAfterDelay();
   } catch (error) {
-    alert(`No se pudo corregir la caja en Supabase: ${error.message}`);
+    fallbackToLocal("Supabase no respondió al corregir la caja. Operando en local.");
+    addMovement("caja", `Monto inicial corregido de ${formatCurrency(previousAmount)} a ${formatCurrency(correctedAmount)}`, correctedAmount - previousAmount);
+    state.toast = `Monto inicial corregido de ${formatCurrency(previousAmount)} a ${formatCurrency(correctedAmount)}.`;
+    saveState();
+    render();
+    dismissToastAfterDelay();
   }
 }
 
@@ -5287,6 +6397,20 @@ async function voidCashRegister() {
 
   if (!confirm("Esta accion anula la caja abierta y permite abrir una nueva. ¿Continuar?")) return;
 
+  if (!supabaseConfigured()) {
+    state.cashRegister.status = "cerrada";
+    state.cashRegister.closedAt = new Date().toISOString();
+    state.cashRegister.countedAmount = 0;
+    state.cashRegister.difference = -state.cashRegister.initialAmount;
+    state.cashRegister.notes = "Caja anulada antes de ventas.";
+    addMovement("caja", "Caja anulada antes de ventas", 0);
+    state.toast = "Caja anulada correctamente.";
+    saveState();
+    render();
+    dismissToastAfterDelay();
+    return;
+  }
+
   try {
     state.cashRegister.status = "cerrada";
     state.cashRegister.closedAt = new Date().toISOString();
@@ -5298,7 +6422,17 @@ async function voidCashRegister() {
     await hydrateFromSupabase();
     dismissToastAfterDelay();
   } catch (error) {
-    alert(`No se pudo anular la caja en Supabase: ${error.message}`);
+    fallbackToLocal("Supabase no respondió al anular la caja. Operando en local.");
+    state.cashRegister.status = "cerrada";
+    state.cashRegister.closedAt = new Date().toISOString();
+    state.cashRegister.countedAmount = 0;
+    state.cashRegister.difference = -state.cashRegister.initialAmount;
+    state.cashRegister.notes = "Caja anulada antes de ventas.";
+    addMovement("caja", "Caja anulada antes de ventas", 0);
+    state.toast = "Caja anulada correctamente.";
+    saveState();
+    render();
+    dismissToastAfterDelay();
   }
 }
 
@@ -5311,13 +6445,28 @@ async function reopenCashRegister() {
   state.cashRegister.closedAt = null;
   state.cashRegister.countedAmount = null;
   state.cashRegister.difference = null;
+
+  if (!supabaseConfigured()) {
+    addMovement("caja", "Caja reabierta para correccion", 0);
+    state.toast = "Caja reabierta para correccion.";
+    saveState();
+    render();
+    dismissToastAfterDelay();
+    return;
+  }
+
   try {
     await dbUpdateCashRegister(state.cashRegister);
     state.toast = "Caja reabierta para correccion.";
     await hydrateFromSupabase();
     dismissToastAfterDelay();
   } catch (error) {
-    alert(`No se pudo reabrir la caja en Supabase: ${error.message}`);
+    fallbackToLocal("Supabase no respondió al reabrir la caja. Operando en local.");
+    addMovement("caja", "Caja reabierta para correccion", 0);
+    state.toast = "Caja reabierta para correccion.";
+    saveState();
+    render();
+    dismissToastAfterDelay();
   }
 }
 
@@ -5332,6 +6481,15 @@ async function deleteCashRegister() {
 
   if (!confirm("Esto elimina la caja actual del prototipo local y permite abrir otra. ¿Continuar?")) return;
 
+  if (!supabaseConfigured()) {
+    state.cashRegister = null;
+    state.toast = "Caja eliminada correctamente.";
+    saveState();
+    render();
+    dismissToastAfterDelay();
+    return;
+  }
+
   try {
     await supabaseDeleteWhere("cash_registers", `id=eq.${encodeURIComponent(state.cashRegister.id)}`);
     state.cashRegister = null;
@@ -5339,7 +6497,12 @@ async function deleteCashRegister() {
     await hydrateFromSupabase();
     dismissToastAfterDelay();
   } catch (error) {
-    alert(`No se pudo eliminar la caja en Supabase: ${error.message}`);
+    fallbackToLocal("Supabase no respondió al eliminar la caja. Operando en local.");
+    state.cashRegister = null;
+    state.toast = "Caja eliminada correctamente.";
+    saveState();
+    render();
+    dismissToastAfterDelay();
   }
 }
 
@@ -5505,6 +6668,11 @@ async function confirmSale() {
     state.cashRegister.transferTotal += total;
   }
 
+  if (!supabaseConfigured()) {
+    finalizeLocalSale({ dbItems, paymentMethod: data.paymentMethod, createdAt, total });
+    return;
+  }
+
   try {
     await dbCreateSale(dbItems, data.paymentMethod, createdAt);
     state.saleCart = [];
@@ -5515,8 +6683,11 @@ async function confirmSale() {
     dismissToastAfterDelay();
   } catch (error) {
     state.pendingSale = null;
-    alert(`No se pudo registrar la venta en Supabase: ${error.message}`);
-    await hydrateFromSupabase();
+    supabaseRuntimeFallback = true;
+    state.supabase.status = "local";
+    state.supabase.message = "Supabase no respondió al registrar una venta. Operando en local.";
+    state.supabase.checkedAt = new Date().toISOString();
+    finalizeLocalSale({ dbItems, paymentMethod: data.paymentMethod, createdAt, total });
   }
 }
 
@@ -5529,6 +6700,42 @@ function addMovement(type, description, amount = 0) {
     userName: activeUser().name || "Sistema",
     createdAt: new Date().toISOString(),
   });
+}
+
+function finalizeLocalSale({ dbItems, paymentMethod, createdAt, total }) {
+  const transactionId = crypto.randomUUID();
+  dbItems.forEach(({ product, quantity, itemTotal, cost }) => {
+    state.sales.push({
+      id: crypto.randomUUID(),
+      transactionId,
+      productId: product.id,
+      productName: product.name,
+      quantity,
+      paymentMethod,
+      total: itemTotal,
+      cost,
+      profit: itemTotal - cost,
+      createdAt,
+    });
+    addMovement("venta", `Venta: ${quantity} x ${product.name}`, itemTotal);
+  });
+  addCashMovement({
+    type: "income",
+    category: "venta_producto",
+    description: "Venta de productos",
+    amount: total,
+    paymentMethod,
+    relatedTable: "sales",
+    relatedId: transactionId,
+    occurredAt: createdAt,
+  });
+  state.saleCart = [];
+  state.pendingSale = null;
+  state.saleNewPanelOpen = true;
+  state.toast = `Venta registrada por ${formatCurrency(total)}.`;
+  saveState();
+  render();
+  dismissToastAfterDelay();
 }
 
 function addCashMovement({
