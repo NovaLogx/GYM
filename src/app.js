@@ -41,19 +41,31 @@ const SUPPLEMENT_CATEGORY_LABELS = {
   Quemadores: "Quemadores",
 };
 const SUPPLEMENT_CATEGORY_ORDER = ["Proteinas", "Creatinas", "Quemadores", "Aminoacidos"];
+const SUPPLEMENT_PRODUCT_ID_MAP = {
+  "supp-order-proton-3lb": "f3d2b0d1-4148-4d8b-8f1a-78f7d4a40001",
+  "supp-order-whey-gourmet": "f3d2b0d1-4148-4d8b-8f1a-78f7d4a40002",
+  "supp-order-bi-pro-2lb": "f3d2b0d1-4148-4d8b-8f1a-78f7d4a40003",
+  "supp-order-tnt-3lb": "f3d2b0d1-4148-4d8b-8f1a-78f7d4a40004",
+  "supp-order-creatina-platinum-90-serv": "f3d2b0d1-4148-4d8b-8f1a-78f7d4a40005",
+  "supp-order-creatina-dragon-pharma": "f3d2b0d1-4148-4d8b-8f1a-78f7d4a40006",
+  "supp-order-creatina-monohidrato-insane-lab": "f3d2b0d1-4148-4d8b-8f1a-78f7d4a40007",
+  "supp-order-creatina-crea-stack-red-berries": "f3d2b0d1-4148-4d8b-8f1a-78f7d4a40008",
+  "supp-order-burner-stack-nutriamerican": "f3d2b0d1-4148-4d8b-8f1a-78f7d4a40009",
+  "supp-order-rc-amino-tone-eaa": "f3d2b0d1-4148-4d8b-8f1a-78f7d4a40010",
+};
 const SUPPLEMENT_ORDER_DATA_VERSION = "2026-07-22-complete-order-only-v1";
 const SUPPLEMENT_PRESENTATION_VERSION = "2026-07-22-product-images-v1";
 const SUPPLEMENT_PRESENTATION_UPDATES = {
-  "supp-order-proton-3lb": { name: "Proton Gainer", imageUrl: "./assets/product-images/supplements/proton-gainer.jpg" },
-  "supp-order-whey-gourmet": { name: "Whey Gourmet", imageUrl: "./assets/product-images/supplements/whey-gourmet.jpg" },
-  "supp-order-bi-pro-2lb": { name: "Bi Pro", imageUrl: "./assets/product-images/supplements/bi-pro-classic.jpg" },
-  "supp-order-tnt-3lb": { name: "TNT Mega Mass", imageUrl: "./assets/product-images/supplements/tnt-mega-mass.jpg" },
-  "supp-order-creatina-platinum-90-serv": { name: "Crea Platinum", imageUrl: "./assets/product-images/supplements/creatina-platinum.jpg" },
-  "supp-order-creatina-dragon-pharma": { name: "Crea Dragon", imageUrl: "./assets/product-images/supplements/creatina-dragon.jpg" },
-  "supp-order-creatina-monohidrato-insane-lab": { name: "Crea Insane", imageUrl: "./assets/product-images/supplements/creatina-insane.jpg" },
-  "supp-order-creatina-crea-stack-red-berries": { name: "Crea Stack", imageUrl: "./assets/product-images/supplements/crea-stack.jpg" },
-  "supp-order-burner-stack-nutriamerican": { name: "Burner Stack" },
-  "supp-order-rc-amino-tone-eaa": { name: "Amino Tone EAA" },
+  [SUPPLEMENT_PRODUCT_ID_MAP["supp-order-proton-3lb"]]: { name: "Proton Gainer", imageUrl: "./assets/product-images/supplements/proton-gainer.jpg" },
+  [SUPPLEMENT_PRODUCT_ID_MAP["supp-order-whey-gourmet"]]: { name: "Whey Gourmet", imageUrl: "./assets/product-images/supplements/whey-gourmet.jpg" },
+  [SUPPLEMENT_PRODUCT_ID_MAP["supp-order-bi-pro-2lb"]]: { name: "Bi Pro", imageUrl: "./assets/product-images/supplements/bi-pro-classic.jpg" },
+  [SUPPLEMENT_PRODUCT_ID_MAP["supp-order-tnt-3lb"]]: { name: "TNT Mega Mass", imageUrl: "./assets/product-images/supplements/tnt-mega-mass.jpg" },
+  [SUPPLEMENT_PRODUCT_ID_MAP["supp-order-creatina-platinum-90-serv"]]: { name: "Crea Platinum", imageUrl: "./assets/product-images/supplements/creatina-platinum.jpg" },
+  [SUPPLEMENT_PRODUCT_ID_MAP["supp-order-creatina-dragon-pharma"]]: { name: "Crea Dragon", imageUrl: "./assets/product-images/supplements/creatina-dragon.jpg" },
+  [SUPPLEMENT_PRODUCT_ID_MAP["supp-order-creatina-monohidrato-insane-lab"]]: { name: "Crea Insane", imageUrl: "./assets/product-images/supplements/creatina-insane.jpg" },
+  [SUPPLEMENT_PRODUCT_ID_MAP["supp-order-creatina-crea-stack-red-berries"]]: { name: "Crea Stack", imageUrl: "./assets/product-images/supplements/crea-stack.jpg" },
+  [SUPPLEMENT_PRODUCT_ID_MAP["supp-order-burner-stack-nutriamerican"]]: { name: "Burner Stack" },
+  [SUPPLEMENT_PRODUCT_ID_MAP["supp-order-rc-amino-tone-eaa"]]: { name: "Amino Tone EAA" },
 };
 const DEFAULT_SUPPLEMENT_MARGIN_SETTINGS = {
   minimumMargin: 30,
@@ -1628,7 +1640,7 @@ async function hydrateSupplementsFromSupabase() {
     return;
   }
 
-  const [products, movements, sales, plans, projects, projections] = await Promise.all([
+  let [products, movements, sales, plans, projects, projections] = await Promise.all([
     optionalSupabaseSelect("supplement_products", "select=*&order=name.asc"),
     optionalSupabaseSelect("supplement_inventory_movements", "select=*&order=created_at.desc&limit=1000"),
     optionalSupabaseSelect("supplement_sales", "select=*&order=created_at.desc&limit=1000"),
@@ -1636,6 +1648,11 @@ async function hydrateSupplementsFromSupabase() {
     optionalSupabaseSelect("supplement_projects", "select=*&order=created_at.desc&limit=100"),
     optionalSupabaseSelect("supplement_projections", "select=*&order=created_at.desc&limit=100"),
   ]);
+
+  if (!products?.length) {
+    await seedBaseSupplementsIfNeeded();
+    products = await optionalSupabaseSelect("supplement_products", "select=*&order=name.asc");
+  }
 
   if (products?.length) state.supplementProducts = products.map(dbSupplementProductToLocal);
   if (movements?.length) state.supplementMovements = movements.map(dbSupplementMovementToLocal);
@@ -1645,6 +1662,22 @@ async function hydrateSupplementsFromSupabase() {
   if (projections?.length) state.supplementProjections = projections.map(dbSupplementProjectionToLocal);
   ensureLocalSupplementSeed();
   applySupplementPresentationUpdates();
+}
+
+async function seedBaseSupplementsIfNeeded() {
+  if (!supabaseCredentialsAvailable()) return false;
+  const previousFallback = supabaseRuntimeFallback;
+  supabaseRuntimeFallback = false;
+  try {
+    for (const product of DEFAULT_SUPPLEMENT_PRODUCTS) {
+      await dbUpsertSupplementProduct(normalizeSupplementProduct(product));
+    }
+    persistRuntimeMode("remote");
+    return true;
+  } catch (error) {
+    supabaseRuntimeFallback = previousFallback;
+    throw error;
+  }
 }
 
 function dbSupplementProductToLocal(product) {
@@ -1673,7 +1706,7 @@ function dbSupplementProductToLocal(product) {
 function dbSupplementMovementToLocal(movement) {
   return {
     id: movement.id,
-    productId: movement.product_id,
+    productId: normalizeSupplementProductId(movement.product_id),
     type: movement.movement_type,
     quantity: Number(movement.quantity || 0),
     previousStock: Number(movement.previous_stock || 0),
@@ -2053,6 +2086,10 @@ function isActiveProduct(product) {
   return product.status === "activo";
 }
 
+function normalizeSupplementProductId(id) {
+  return SUPPLEMENT_PRODUCT_ID_MAP[id] || id || crypto.randomUUID();
+}
+
 function normalizeSupplementProduct(product = {}) {
   const purchaseCost = Number(product.purchaseCost ?? product.purchase_cost ?? 0);
   const transportUnitCost = Number(product.transportUnitCost ?? product.transport_unit_cost ?? 0);
@@ -2067,7 +2104,7 @@ function normalizeSupplementProduct(product = {}) {
   const minimumStock = Math.max(0, Number(product.minimumStock ?? product.minimum_stock ?? 0));
   const now = new Date().toISOString();
   return {
-    id: product.id || crypto.randomUUID(),
+    id: normalizeSupplementProductId(product.id),
     orderIndex: Number(product.orderIndex ?? product.order_index ?? 999),
     name: product.name || "Suplemento",
     brand: product.brand || "",
@@ -2108,7 +2145,7 @@ function normalizeSupplementSale(sale = {}) {
   const profit = Number(sale.profit ?? subtotal - totalCost);
   return {
     id: sale.id || crypto.randomUUID(),
-    productId: sale.productId || sale.product_id || "",
+    productId: normalizeSupplementProductId(sale.productId || sale.product_id || ""),
     productName: sale.productName || sale.product_name || "Suplemento",
     quantity,
     unitCost,
@@ -2256,7 +2293,7 @@ function getSupplementTotals(products = activeSupplementProducts()) {
 
 function shouldUseOfficialSupplementOrderTotals(products = activeSupplementProducts()) {
   if (state.supplementDatasetVersion !== SUPPLEMENT_ORDER_DATA_VERSION) return false;
-  const expectedProducts = new Map(DEFAULT_SUPPLEMENT_PRODUCTS.map((product) => [product.id, normalizeSupplementProduct(product)]));
+  const expectedProducts = new Map(DEFAULT_SUPPLEMENT_PRODUCTS.map((product) => [normalizeSupplementProductId(product.id), normalizeSupplementProduct(product)]));
   if (products.length !== expectedProducts.size) return false;
   return products.every((product) => {
     const expected = expectedProducts.get(product.id);
@@ -2414,7 +2451,33 @@ function cashExpected() {
 }
 
 function supabaseConfigured() {
-  return Boolean(DEFAULT_SUPABASE_URL && DEFAULT_SUPABASE_ANON_KEY && !supabaseRuntimeFallback);
+  return Boolean(supabaseCredentialsAvailable() && !supabaseRuntimeFallback);
+}
+
+function supabaseCredentialsAvailable() {
+  return Boolean(DEFAULT_SUPABASE_URL && DEFAULT_SUPABASE_ANON_KEY);
+}
+
+async function runSupplementSharedWrite(action, writeOperation) {
+  if (!supabaseCredentialsAvailable()) {
+    alert(`No se pudo ${action}: la base compartida no esta configurada.`);
+    return false;
+  }
+
+  const previousFallback = supabaseRuntimeFallback;
+  supabaseRuntimeFallback = false;
+  try {
+    await writeOperation();
+    persistRuntimeMode("remote");
+    state.supabase.status = "connected";
+    state.supabase.message = "Datos de suplementos guardados en la base compartida.";
+    state.supabase.checkedAt = new Date().toISOString();
+    return true;
+  } catch (error) {
+    supabaseRuntimeFallback = previousFallback;
+    stopSupplementSharedWrite(action, error);
+    return false;
+  }
 }
 
 function fallbackToLocal(message) {
@@ -2427,6 +2490,15 @@ function fallbackToLocal(message) {
 
 function stopSupplementSharedWrite(action, error) {
   console.warn(`No se pudo ${action} en la base compartida.`, error);
+  const message = String(error?.message || error || "");
+  if (/stock insuficiente/i.test(message)) {
+    alert(message);
+    return;
+  }
+  if (/function|schema cache|could not find|does not exist|404/i.test(message)) {
+    alert(`No se pudo ${action}: falta configurar la base compartida de suplementos en Supabase.`);
+    return;
+  }
   alert(`No se pudo ${action} en la base compartida. Intenta de nuevo antes de continuar.`);
 }
 
@@ -5120,15 +5192,10 @@ async function saveSupplementSale(event) {
     createdAt,
   };
 
-  try {
-    if (supabaseConfigured()) await dbRegisterSupplementSale(sale, product, movement);
-  } catch (error) {
-    const message = String(error?.message || error || "");
-    if (/stock insuficiente/i.test(message)) {
-      alert(`Stock insuficiente. Disponible: ${product.currentStock} unidades.`);
-      return;
-    }
-    stopSupplementSharedWrite("registrar la venta de suplemento", error);
+  const savedSale = await runSupplementSharedWrite("registrar la venta de suplemento", async () => {
+    await dbRegisterSupplementSale(sale);
+  });
+  if (!savedSale) {
     return;
   }
 
@@ -5177,10 +5244,10 @@ async function cancelSupplementSale(event) {
     createdAt: cancelledAt,
   };
 
-  try {
-    if (supabaseConfigured()) await dbCancelSupplementSale(sale, product, movement, reason, cancelledAt);
-  } catch (error) {
-    stopSupplementSharedWrite("anular la venta de suplemento", error);
+  const cancelledSale = await runSupplementSharedWrite("anular la venta de suplemento", async () => {
+    await dbCancelSupplementSale(sale, reason);
+  });
+  if (!cancelledSale) {
     return;
   }
 
@@ -5209,10 +5276,10 @@ async function saveSupplementProduct(event) {
   }
   const existingIndex = state.supplementProducts.findIndex((item) => item.id === product.id);
 
-  try {
-    if (supabaseConfigured()) await dbUpsertSupplementProduct(product);
-  } catch (error) {
-    stopSupplementSharedWrite("guardar el suplemento", error);
+  const savedProduct = await runSupplementSharedWrite("guardar el suplemento", async () => {
+    await dbUpsertSupplementProduct(product);
+  });
+  if (!savedProduct) {
     return;
   }
 
@@ -5235,11 +5302,11 @@ async function toggleSupplementProduct(productId) {
   const previousActive = product.isActive;
   product.isActive = !product.isActive;
   product.updatedAt = new Date().toISOString();
-  try {
-    if (supabaseConfigured()) await dbUpsertSupplementProduct(product);
-  } catch (error) {
+  const savedStatus = await runSupplementSharedWrite("cambiar el estado del suplemento", async () => {
+    await dbUpsertSupplementProduct(product);
+  });
+  if (!savedStatus) {
     product.isActive = previousActive;
-    stopSupplementSharedWrite("cambiar el estado del suplemento", error);
     return;
   }
   state.toast = product.isActive ? "Suplemento activado." : "Suplemento desactivado.";
@@ -5282,16 +5349,14 @@ async function saveSupplementStockMovement(event) {
     createdAt: updatedAt,
   };
 
-  try {
-    if (supabaseConfigured()) {
-      product.currentStock = newStock;
-      product.updatedAt = updatedAt;
-      await dbUpsertSupplementProduct(product);
-      await dbRecordSupplementMovement(movement);
-    }
-  } catch (error) {
+  const savedMovement = await runSupplementSharedWrite("registrar el movimiento de suplemento", async () => {
+    product.currentStock = newStock;
+    product.updatedAt = updatedAt;
+    await dbUpsertSupplementProduct(product);
+    await dbRecordSupplementMovement(movement);
+  });
+  if (!savedMovement) {
     product.currentStock = previousStock;
-    stopSupplementSharedWrite("registrar el movimiento de suplemento", error);
     return;
   }
 
@@ -5389,59 +5454,31 @@ async function dbRecordSupplementSale(sale) {
   });
 }
 
-async function dbRegisterSupplementSale(sale, product, movement) {
+async function dbRegisterSupplementSale(sale) {
   const userId = isUuid(sale.createdBy) ? sale.createdBy : await dbEnsureProfile();
-  try {
-    return await supabaseRequest("rpc/register_supplement_sale", {
-      method: "POST",
-      body: {
-        p_sale_id: sale.id,
-        p_product_id: sale.productId,
-        p_quantity: sale.quantity,
-        p_unit_price: sale.unitPrice,
-        p_payment_method: sale.paymentMethod,
-        p_customer_name: sale.customerName || null,
-        p_notes: sale.notes || null,
-        p_created_by: userId || null,
-      },
-    });
-  } catch (error) {
-    const message = String(error?.message || error || "");
-    if (!/function|schema cache|could not find|404/i.test(message)) throw error;
-    product.currentStock = movement.newStock;
-    product.updatedAt = sale.createdAt;
-    await dbRecordSupplementSale({ ...sale, createdBy: userId || sale.createdBy });
-    await dbUpsertSupplementProduct(product);
-    await dbRecordSupplementMovement(movement);
-    return null;
-  }
+  return supabaseRequest("rpc/register_supplement_sale", {
+    method: "POST",
+    body: {
+      p_sale_id: sale.id,
+      p_product_id: sale.productId,
+      p_quantity: sale.quantity,
+      p_unit_price: sale.unitPrice,
+      p_payment_method: sale.paymentMethod,
+      p_customer_name: sale.customerName || null,
+      p_notes: sale.notes || null,
+      p_created_by: userId || null,
+    },
+  });
 }
 
-async function dbCancelSupplementSale(sale, product, movement, reason, cancelledAt) {
-  try {
-    return await supabaseRequest("rpc/cancel_supplement_sale", {
-      method: "POST",
-      body: {
-        p_sale_id: sale.id,
-        p_reason: reason,
-      },
-    });
-  } catch (error) {
-    const message = String(error?.message || error || "");
-    if (!/function|schema cache|could not find|404/i.test(message)) throw error;
-    await supabasePatch("supplement_sales", sale.id, {
-      status: "cancelled",
-      cancelled_at: cancelledAt,
-      cancellation_reason: reason,
-    });
-    if (product) {
-      product.currentStock = movement.newStock;
-      product.updatedAt = cancelledAt;
-      await dbUpsertSupplementProduct(product);
-    }
-    await dbRecordSupplementMovement(movement);
-    return null;
-  }
+async function dbCancelSupplementSale(sale, reason) {
+  return supabaseRequest("rpc/cancel_supplement_sale", {
+    method: "POST",
+    body: {
+      p_sale_id: sale.id,
+      p_reason: reason,
+    },
+  });
 }
 
 function renderSettings() {
