@@ -416,7 +416,7 @@ const SESSION_STORAGE_KEY = "bodyfit.session.v1";
 const LOCAL_STATE_STORAGE_KEY = "bodyfit.local-state.v1";
 let supabaseRuntimeFallback = (() => {
   try {
-    return localStorage.getItem(RUNTIME_MODE_KEY) === "local";
+    return localStorage.getItem(RUNTIME_MODE_KEY) === "local" && !(DEFAULT_SUPABASE_URL && DEFAULT_SUPABASE_ANON_KEY);
   } catch (error) {
     return false;
   }
@@ -620,12 +620,15 @@ function ensureLocalInventorySeed() {
 
 function ensureLocalSupplementSeed() {
   if (state.supplementDatasetVersion === SUPPLEMENT_ORDER_DATA_VERSION && state.supplementProducts.length) return;
+  const existingMovements = Array.isArray(state.supplementMovements) ? state.supplementMovements : [];
+  const existingSales = Array.isArray(state.supplementSales) ? state.supplementSales.map(normalizeSupplementSale) : [];
+  const existingProjections = Array.isArray(state.supplementProjections) ? state.supplementProjections : [];
   state.supplementProducts = DEFAULT_SUPPLEMENT_PRODUCTS.map((product) => normalizeSupplementProduct(product));
   const now = new Date().toISOString();
   const totals = getSupplementTotals(state.supplementProducts);
-  state.supplementMovements = [];
-  state.supplementSales = [];
-  state.supplementProjections = [];
+  state.supplementMovements = existingMovements;
+  state.supplementSales = existingSales;
+  state.supplementProjections = existingProjections;
   state.supplementSearch = "";
   state.supplementCategoryFilter = "all";
   state.supplementBrandFilter = "all";
@@ -2420,6 +2423,11 @@ function fallbackToLocal(message) {
   state.supabase.status = "local";
   state.supabase.message = message;
   state.supabase.checkedAt = new Date().toISOString();
+}
+
+function stopSupplementSharedWrite(action, error) {
+  console.warn(`No se pudo ${action} en la base compartida.`, error);
+  alert(`No se pudo ${action} en la base compartida. Intenta de nuevo antes de continuar.`);
 }
 
 function icon(name) {
@@ -5120,7 +5128,8 @@ async function saveSupplementSale(event) {
       alert(`Stock insuficiente. Disponible: ${product.currentStock} unidades.`);
       return;
     }
-    fallbackToLocal("Supabase no respondió al registrar la venta de suplemento. Operando en local.");
+    stopSupplementSharedWrite("registrar la venta de suplemento", error);
+    return;
   }
 
   product.currentStock = newStock;
@@ -5171,7 +5180,8 @@ async function cancelSupplementSale(event) {
   try {
     if (supabaseConfigured()) await dbCancelSupplementSale(sale, product, movement, reason, cancelledAt);
   } catch (error) {
-    fallbackToLocal("Supabase no respondió al anular la venta de suplemento. Operando en local.");
+    stopSupplementSharedWrite("anular la venta de suplemento", error);
+    return;
   }
 
   sale.status = "cancelled";
@@ -5198,18 +5208,20 @@ async function saveSupplementProduct(event) {
     return;
   }
   const existingIndex = state.supplementProducts.findIndex((item) => item.id === product.id);
+
+  try {
+    if (supabaseConfigured()) await dbUpsertSupplementProduct(product);
+  } catch (error) {
+    stopSupplementSharedWrite("guardar el suplemento", error);
+    return;
+  }
+
   const nextProducts = [...state.supplementProducts];
   if (existingIndex >= 0) nextProducts[existingIndex] = product;
   else nextProducts.push(product);
   state.supplementProducts = nextProducts;
   state.supplementProductModalOpen = false;
   state.supplementEditingProductId = "";
-
-  try {
-    if (supabaseConfigured()) await dbUpsertSupplementProduct(product);
-  } catch (error) {
-    fallbackToLocal("Supabase no respondió al guardar suplementos. Operando en local.");
-  }
   state.toast = existingIndex >= 0 ? "Suplemento actualizado." : "Suplemento creado.";
   saveState();
   render();
@@ -5220,12 +5232,15 @@ async function toggleSupplementProduct(productId) {
   if (!requirePermission("supplements-manage")) return;
   const product = state.supplementProducts.find((item) => item.id === productId);
   if (!product) return;
+  const previousActive = product.isActive;
   product.isActive = !product.isActive;
   product.updatedAt = new Date().toISOString();
   try {
     if (supabaseConfigured()) await dbUpsertSupplementProduct(product);
   } catch (error) {
-    fallbackToLocal("Supabase no respondió al cambiar el estado del suplemento. Operando en local.");
+    product.isActive = previousActive;
+    stopSupplementSharedWrite("cambiar el estado del suplemento", error);
+    return;
   }
   state.toast = product.isActive ? "Suplemento activado." : "Suplemento desactivado.";
   saveState();
@@ -5252,8 +5267,7 @@ async function saveSupplementStockMovement(event) {
     alert("No se permite stock negativo en suplementos.");
     return;
   }
-  product.currentStock = newStock;
-  product.updatedAt = new Date().toISOString();
+  const updatedAt = new Date().toISOString();
   const movement = {
     id: crypto.randomUUID(),
     productId: product.id,
@@ -5265,20 +5279,27 @@ async function saveSupplementStockMovement(event) {
     observations: (data.supplementStockObservations || "").trim(),
     userName: activeUser().name || "Sistema",
     profit: signedQuantity < 0 ? (product.salePrice - product.totalUnitCost) * Math.abs(signedQuantity) : 0,
-    createdAt: new Date().toISOString(),
+    createdAt: updatedAt,
   };
-  state.supplementMovements.push(movement);
-  state.supplementStockProductId = "";
-  addMovement("inventario", `Suplementos: ${movement.quantity > 0 ? "entrada" : "salida"} de ${Math.abs(movement.quantity)} x ${product.name}`);
 
   try {
     if (supabaseConfigured()) {
+      product.currentStock = newStock;
+      product.updatedAt = updatedAt;
       await dbUpsertSupplementProduct(product);
       await dbRecordSupplementMovement(movement);
     }
   } catch (error) {
-    fallbackToLocal("Supabase no respondió al registrar movimiento de suplementos. Operando en local.");
+    product.currentStock = previousStock;
+    stopSupplementSharedWrite("registrar el movimiento de suplemento", error);
+    return;
   }
+
+  product.currentStock = newStock;
+  product.updatedAt = updatedAt;
+  state.supplementMovements.push(movement);
+  state.supplementStockProductId = "";
+  addMovement("inventario", `Suplementos: ${movement.quantity > 0 ? "entrada" : "salida"} de ${Math.abs(movement.quantity)} x ${product.name}`);
   state.toast = "Movimiento de suplemento registrado.";
   saveState();
   render();
