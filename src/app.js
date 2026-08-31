@@ -1640,6 +1640,11 @@ async function hydrateSupplementsFromSupabase() {
     return;
   }
 
+  const localSupplementState = loadLocalState();
+  const recoverableLocalSales = Array.isArray(localSupplementState.supplementSales)
+    ? localSupplementState.supplementSales.map(normalizeSupplementSale)
+    : [];
+
   let [products, movements, sales, plans, projects, projections] = await Promise.all([
     optionalSupabaseSelect("supplement_products", "select=*&order=name.asc"),
     optionalSupabaseSelect("supplement_inventory_movements", "select=*&order=created_at.desc&limit=1000"),
@@ -1662,6 +1667,7 @@ async function hydrateSupplementsFromSupabase() {
   if (projections?.length) state.supplementProjections = projections.map(dbSupplementProjectionToLocal);
   ensureLocalSupplementSeed();
   applySupplementPresentationUpdates();
+  await recoverLocalSupplementSales(recoverableLocalSales, sales || []);
 }
 
 async function seedBaseSupplementsIfNeeded() {
@@ -1677,6 +1683,34 @@ async function seedBaseSupplementsIfNeeded() {
   } catch (error) {
     supabaseRuntimeFallback = previousFallback;
     throw error;
+  }
+}
+
+async function recoverLocalSupplementSales(localSales = [], remoteSales = []) {
+  const remoteSaleIds = new Set(remoteSales.map((sale) => sale.id));
+  const productIds = new Set(state.supplementProducts.map((product) => product.id));
+  const pendingSales = localSales
+    .filter((sale) => sale.status !== "cancelled")
+    .filter((sale) => sale.id && !remoteSaleIds.has(sale.id))
+    .filter((sale) => productIds.has(sale.productId));
+
+  if (!pendingSales.length) return;
+
+  let recovered = 0;
+  for (const sale of pendingSales) {
+    try {
+      await dbRegisterSupplementSale(sale);
+      recovered += 1;
+    } catch (error) {
+      console.warn("No se pudo recuperar una venta local de suplemento.", error);
+    }
+  }
+
+  if (recovered) {
+    const syncedSales = await optionalSupabaseSelect("supplement_sales", "select=*&order=created_at.desc&limit=1000");
+    state.supplementSales = syncedSales.map(dbSupplementSaleToLocal);
+    state.toast = `Se recuperaron ${recovered} venta${recovered === 1 ? "" : "s"} local${recovered === 1 ? "" : "es"} de suplementos.`;
+    saveState();
   }
 }
 
@@ -2540,7 +2574,7 @@ function renderAppHeader() {
     <header class="topbar">
       <div class="brand-wrap">
         <div class="brand">
-          <strong class="brand-title">BODY-FIT Software</strong>
+          <strong class="brand-title">NOVA-FIT Software</strong>
           <span>POS, inventario, caja y monitoreo operativo</span>
         </div>
       </div>
@@ -2566,7 +2600,7 @@ function renderSidebar() {
   return `
     <header class="sidebar app-navbar" aria-label="Navegacion principal">
       <div class="sidebar-brand">
-        <strong class="sidebar-wordmark">BODY FI<span class="wordmark-t">T</span></strong>
+        <strong class="sidebar-wordmark">NOVA FI<span class="wordmark-t">T</span></strong>
       </div>
       <div class="sidebar-section">
         ${mainItems.map(([id, label, iconName]) => navButton(id, label, iconName)).join("")}

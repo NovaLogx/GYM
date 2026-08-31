@@ -1299,7 +1299,7 @@ th {
   gap: 8px;
   justify-content: flex-start;
   min-height: 58px;
-  min-width: 0;
+  min-width: 235px;
   overflow: hidden;
   padding: 0;
   text-align: left;
@@ -1330,13 +1330,13 @@ th {
   color: transparent;
   display: inline-block;
   font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(28px, 2.7vw, 37px);
+  font-size: clamp(34px, 3.25vw, 46px);
   font-weight: 900;
   letter-spacing: 0;
   line-height: 1;
   max-width: 100%;
-  transform: scaleX(0.94);
-  transform-origin: center;
+  transform: scaleX(0.98);
+  transform-origin: left center;
   white-space: nowrap;
   -webkit-text-stroke: 0.28px rgba(226, 232, 240, 0.42);
   filter: contrast(1.42) saturate(1.72);
